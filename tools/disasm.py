@@ -1,4 +1,4 @@
-"""Disassemble Warcraft III.exe around RVAs (capstone, no other deps).
+"""Disassemble Game.dll around RVAs (capstone, no other deps).
 
     python tools/disasm.py 4d7bb4 3fc4d0            # function containing each RVA
     python tools/disasm.py --at 3fc4d0 --n 40       # 40 instructions starting at RVA
@@ -20,7 +20,7 @@ import capstone
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from wc3env.settings import settings
 
-EXE = settings().game_exe
+EXE = settings().game_dir / "Game.dll"
 
 
 class Image:
@@ -41,14 +41,18 @@ class Image:
 
     def read(self, rva: int, n: int) -> bytes:
         for _, va, vsize, rptr, rsize in self.sections:
-            if va <= rva < va + max(vsize, rsize):
+            if va <= rva < va + rsize:
                 off = rptr + (rva - va)
-                return self.d[off : off + n]
+                return self.d[off : off + min(n, va + rsize - rva)]
         raise ValueError(f"rva {rva:x} not in any section")
 
     def func_start(self, rva: int, limit: int = 0x4000) -> int:
         """Scan back for the standard prologue 55 8B EC (push ebp; mov ebp, esp)."""
         lo = max(rva - limit, 0)
+        for _, va, _, _, rsize in self.sections:
+            if va <= rva < va + rsize:
+                lo = max(lo, va)
+                break
         blob = self.read(lo, rva - lo + 1)
         i = len(blob) - 1
         while i >= 2:

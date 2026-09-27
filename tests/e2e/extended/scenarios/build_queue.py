@@ -22,7 +22,7 @@ class BuildQueue(ScenarioAgent):
                 Action(
                     builder["unit_id"],
                     "build",
-                    {"type_id": FARM, "x": hall["x"] + dx, "y": hall["y"] + dy, "queued": queued},
+                    {"type_id": FARM, "x": hall["x"] + dx, "y": hall["y"] + dy, "queued": queued, "auto_place": True},
                 )
                 for (dx, dy), queued in zip(SPOTS, (False, True))
             ]

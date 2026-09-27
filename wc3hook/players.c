@@ -68,7 +68,7 @@ void players_clear(void) {
 void players_unregister(void) {
     /* Remove identities we added: Warcraft otherwise waits for them during teardown.
      * Check membership first; the native unregister method dereferences a missing entry. */
-    BYTE *table = g_game + 0x3d0;
+    BYTE *table = g_game + 0x290;
     for (int p = 0; p < 16; p++)
         if (g_registered & (1u << p)) {
             int found = 0;
@@ -101,11 +101,11 @@ const char *players_configure(unsigned agents) {
     BYTE wire[16] = {0}, used[256] = {0};
     unsigned found = 0;
     {
-        BYTE *table = g_game + 0x3d0;
+        BYTE *table = g_game + 0x290;
         for (int group = 0; group < 2; group++) {
             DWORD count = *(DWORD *)(table + 0x2c + 0x10 * group);
             BYTE **entries = *(BYTE ***)(table + 0x30 + 0x10 * group);
-            if (count > 24)
+            if (count > 16)
                 return "unexpected player table";
             for (DWORD i = 0; i < count; i++)
                 if (entries[i]) {
@@ -118,7 +118,7 @@ const char *players_configure(unsigned agents) {
                 }
         }
         int available = 0, needed = 0;
-        for (int id = 1; id < 25; id++)
+        for (int id = 1; id < 13; id++)
             if (!used[id])
                 available++;
         for (int p = 0; p < 16; p++)

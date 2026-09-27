@@ -23,7 +23,13 @@ def read_all(names: list[str], game_dir: Path | None = None) -> dict[str, str]:
             for n in names:
                 if n not in out and a.has(n):
                     try:
-                        out[n] = a.read(n).decode("latin-1")
+                        raw = a.read(n)
+                        # Localized 1.27a tables can be UTF-8. Pathing textures
+                        # intentionally use a lossless byte-to-text transport.
+                        try:
+                            out[n] = raw.decode("latin-1" if n.lower().endswith(".tga") else "utf-8-sig")
+                        except UnicodeDecodeError:
+                            out[n] = raw.decode("latin-1")
                     except OSError:
                         pass
     return out

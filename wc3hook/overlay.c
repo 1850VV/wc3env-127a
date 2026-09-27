@@ -19,9 +19,9 @@ const char *overlay_show(yyjson_val *args, JW *w) {
     float fx = (float)x, fy = (float)y, duration = (float)seconds;
     inner[7] = (DWORD)panel;
     outer[2] = (DWORD)inner;
-    int player = NATIVE(0x093790, int(__cdecl *)(void))();
-    NATIVE(0x08a9b0, void(__cdecl *)(void))(); /* ClearTextMessages */
-    NATIVE(0x08fbe0, TextFn)(player, &fx, &fy, &duration, outer);
+    int player = NATIVE(P127_LOCAL_PLAYER, int(__cdecl *)(void))();
+    NATIVE(RVA_N_CLEARTEXTMESSAGES, void(__cdecl *)(void))(); /* ClearTextMessages */
+    NATIVE(RVA_N_DISPLAYTIMEDTEXTTOPLAYER, TextFn)(player, &fx, &fy, &duration, outer);
     jw_key(w, "displayed");
     jw_bool(w, 1);
     return NULL;

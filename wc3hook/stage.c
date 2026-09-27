@@ -9,21 +9,6 @@
  * which allocates on first sight. So a unit no script ever touched still gets a handle here. */
 #include "wc3hook.h"
 
-#define RVA_VM_CONTEXT 0x077710 /* thiscall(this = *g_vm_global) -> the handle context */
-#define RVA_HANDLE_FOR 0x0e72c0 /* thiscall(ctx; obj, 0) -> handle, allocated if new */
-#define RVA_ITEM_OBJECT                                                                                                \
-    0x082050 /* cdecl(Hitem) -> item object (the lookup is per class: units 0x83940, players 0x82770) */
-#define RVA_N_CREATEUNIT 0x08ee00     /* (Hplayer;IRRR)Hunit; */
-#define RVA_N_CREATEITEM 0x08e430     /* (IRR)Hitem; */
-#define RVA_N_KILLUNIT 0x0a1ca0       /* (Hunit;)V */
-#define RVA_N_REMOVEUNIT 0x0a53e0     /* (Hunit;)V */
-#define RVA_N_SETHEROLEVEL 0x0a88b0   /* (Hunit;IB)V */
-#define RVA_N_SETTECHRESEARCHED 0x0a9920 /* SetPlayerTechResearched (Hplayer;II)V */
-#define RVA_N_ADDITEMBYID 0x0aead0    /* UnitAddItemById (Hunit;I)Hitem; */
-#define RVA_N_SETUNITSTATE 0x0abba0   /* (Hunit;Hunitstate;R)V */
-#define RVA_N_SETMAXHP 0x0ab7c0       /* BlzSetUnitMaxHP (Hunit;I)V */
-#define RVA_N_SETPLAYERSTATE 0x0a97a0 /* (Hplayer;Hplayerstate;I)V */
-#define RVA_N_INVULNERABLE 0x0ab600   /* SetUnitInvulnerable (Hunit;B)V */
 /* the Convert* natives are the identity, so these enum values are the handles */
 #define UNIT_STATE_LIFE 0
 #define UNIT_STATE_MAX_LIFE 1
@@ -37,7 +22,7 @@ typedef int(__cdecl *N3)(int, int, int);
 typedef int(__cdecl *N5)(int, int, int, int, int);
 typedef void *(__fastcall *VmContextFn)(void *vm, void *edx);
 typedef int(__fastcall *HandleForFn)(void *ctx, void *edx, BYTE *obj, int zero);
-typedef BYTE *(__cdecl *HandleObjectFn)(int handle);
+typedef BYTE *(__fastcall *HandleObjectFn)(int handle);
 
 static int real(float *slot, double v) {
     *slot = (float)v;
@@ -175,8 +160,15 @@ static const char *op_hp(yyjson_val *args, JW *w) {
     NEED(arg_unit(args, &u));
     NEED(arg_value(args, &v));
     BYTE *obj = unit_of(u);
-    if (obj && v > bits_to_f(unit_state_bits(obj, UNIT_STATE_MAX_LIFE)))
-        NATIVE(RVA_N_SETMAXHP, N2)(u, (int)v);
+    if (obj && v > bits_to_f(unit_state_bits(obj, UNIT_STATE_MAX_LIFE))) {
+        /* SetDestructableMaxLife uses the shared widget max-life adjustment.
+         * Mode 1 applies a delta and preserves life ratio; SetUnitState below
+         * then sets the requested current life. The 1.27a unitstate setter
+         * silently ignores MAX_LIFE, and this build has no BlzSetUnitMaxHP. */
+        float delta = (float)v - bits_to_f(unit_state_bits(obj, UNIT_STATE_MAX_LIFE));
+        typedef void(__fastcall * AdjustMaxLifeFn)(BYTE *, void *, float *, int);
+        NATIVE(RVA_WIDGET_ADJUST_MAX_LIFE, AdjustMaxLifeFn)(obj, NULL, &delta, 1);
+    }
     NATIVE(RVA_N_SETUNITSTATE, N3)(u, UNIT_STATE_LIFE, real(&f, v));
     return NULL;
 }
@@ -234,11 +226,12 @@ static const char *op_destructable(yyjson_val *args, JW *w) {
     NEED(arg_xy(args, &x, &y));
     if (yyjson_obj_get(args, "invulnerable"))
         NEED(arg_int(args, "invulnerable", 0, 1, &invulnerable));
-    int h = NATIVE(0x08de70, CreateFn)((int)type, real(&fx, x), real(&fy, y), real(&face, 0), real(&scale, 1), 0);
-    BYTE *d = h ? NATIVE(0x081470, HandleObjectFn)(h) : NULL;
+    int h = NATIVE(RVA_N_CREATEDESTRUCTABLE, CreateFn)((int)type, real(&fx, x), real(&fy, y), real(&face, 0),
+                                                       real(&scale, 1), 0);
+    BYTE *d = h ? NATIVE(RVA_HANDLE_DESTRUCTABLE, HandleObjectFn)(h) : NULL;
     if (!d)
         return "the destructable was not created";
-    NATIVE(0x0a7b60, N2)(h, (int)invulnerable);
+    NATIVE(RVA_N_SETDESTRUCTABLEINVULNERABLE, N2)(h, (int)invulnerable);
     jw_key(w, "id");
     jw_uint(w, *(DWORD *)(d + 0xc));
     return NULL;
@@ -251,7 +244,7 @@ static const char *op_alliance(yyjson_val *args, JW *w) {
     NEED(arg_int(args, "other", 0, 15, &other));
     NEED(arg_int(args, "kind", 0, 9, &kind));
     NEED(arg_int(args, "enabled", 0, 1, &enabled));
-    NATIVE(0x0a94a0, AllianceFn)(player, player_handle((int)other), (int)kind, (int)enabled);
+    NATIVE(RVA_N_SETPLAYERALLIANCE, AllianceFn)(player, player_handle((int)other), (int)kind, (int)enabled);
     return NULL;
 }
 /* order {unit_id}: inspect execution after the command stream has consumed an action. */
@@ -267,7 +260,7 @@ static const char *op_camera(yyjson_val *args, JW *w) {
     double x, y;
     float fx, fy;
     NEED(arg_xy(args, &x, &y));
-    NATIVE(0x0a7260, N2)(real(&fx, x), real(&fy, y));
+    NATIVE(RVA_N_SETCAMERAPOSITION, N2)(real(&fx, x), real(&fy, y));
     return NULL;
 }
 /* invulnerable {player, on}: every unit the player owns, now and at the end of every step (so
@@ -276,7 +269,7 @@ static int g_invulnerable_player = -1;
 void stage_clear(void) {
     g_invulnerable_player = -1;
 }
-static int __cdecl invulnerable_cb(BYTE *u, void *ctx) {
+static int __fastcall invulnerable_cb(BYTE *u, void *ctx) {
     BYTE *pl = unit_owner(u);
     if (pl && player_jass_id(pl) == g_invulnerable_player && bits_to_f(unit_state_bits(u, UNIT_STATE_LIFE)) > 0)
         NATIVE(RVA_N_INVULNERABLE, N2)(handle_of(u), 1);

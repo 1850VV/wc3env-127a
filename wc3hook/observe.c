@@ -2,36 +2,21 @@
  * result. */
 #include "wc3hook.h"
 #include "orders_table.h"
+#include "objects127.h"
 
-/* Enumerate units without a group handle. 0x3f4ba0(class, cb, ctx, 0) is the game's own
- * "for every live object of this class" (GroupEnumUnitsOfPlayer ends in it); the unit class
- * id is 0x2b773375. The callback gets the unit object and must return nonzero to continue.
- * Fields are read as the natives read them after their handle->object step:
- *   type id     [obj+0x34]                       (GetUnitTypeId)
- *   position    obj->vtbl[0xb8/4](&v3) then 0x3fcc50 -> float x,y   (GetUnitX/Y)
- *   owner       0x292340(obj) -> player object, byte +0x30 = index (GetOwningPlayer, Player)
- *   life etc.   0x2935c0(obj, &out, state) -> &float, state 0..3 = life, max life, mana, max mana */
-typedef void(__cdecl *EnumObjectsFn)(int cls, void *cb, void *ctx, int zero);
+/* Registry enumeration uses the engine's fastcall callback convention. Object
+ * fields and accessor call sequences match the pinned natives: type +0x30,
+ * position through virtual +0xb8 and RVA_POS_UNPACK, owner via RVA_UNIT_OWNER,
+ * player ID at +0x30, and unit states via RVA_UNIT_STATE. */
+typedef void(__fastcall *EnumObjectsFn)(int cls, void *cb, void *ctx, int zero);
 BYTE *g_fn_owner, *g_fn_state, *g_fn_unpack; /* g_base + RVA_*, for the naked bodies */
 /* the accessors copy the natives' instruction sequences (they rely on caller-cleanup quirks) */
-__declspec(naked) int __cdecl unit_xy_bits(BYTE *u, int idx) { /* float bits of x (idx 0) or y (4) */
-    __asm {
-        push ebp
-        mov ebp, esp
-        sub esp, 0xc
-        mov ecx, [ebp + 8]
-        lea eax, [ebp - 0xc]
-        push eax
-        mov eax, [ecx]
-        call dword ptr [eax + 0xb8]
-        mov ecx, eax
-        call dword ptr [g_fn_unpack]
-        add eax, [ebp + 0xc]
-        mov eax, [eax]
-        mov esp, ebp
-        pop ebp
-        ret
-    }
+int __cdecl unit_xy_bits(BYTE *u, int idx) {
+    float xyz[3];
+    object127_position(u, xyz);
+    int bits;
+    memcpy(&bits, (BYTE *)xyz + idx, sizeof bits);
+    return bits;
 }
 __declspec(naked) int __cdecl unit_state_bits(BYTE *u, int state) { /* 0 life 1 max 2 mana 3 max */
     __asm {
@@ -56,37 +41,10 @@ __declspec(naked) BYTE *__cdecl unit_owner(BYTE *u) {
         jmp dword ptr [g_fn_owner]
     }
 }
-/* GetPlayerId's body after its handle step: the internal slot (byte +0x30), mapped 24..27 ->
- * 12..15 for maps whose script version is below 0x17ac (the neutral players on legacy maps) */
-BYTE *g_vm_global, *g_fn_ctx, *g_fn_ver;
-__declspec(naked) int __cdecl player_jass_id(BYTE *pl) {
-    __asm {
-        push ebp
-        mov ebp, esp
-        push esi
-        mov eax, [ebp + 8]
-        movzx esi, byte ptr [eax + 0x30]
-        mov eax, dword ptr [g_vm_global]
-        mov eax, [eax]
-        mov ecx, [eax + 0x30]
-        lea ecx, [ecx + 0x24]
-        call dword ptr [g_fn_ctx]
-        push eax
-        call dword ptr [g_fn_ver]
-        add esp, 4
-        cmp eax, 0x17ac
-        jae keep
-        lea eax, [esi - 0x18]
-        cmp eax, 3
-        lea eax, [esi - 0xc]
-        jbe done
-    keep:
-        mov eax, esi
-    done:
-        pop esi
-        pop ebp
-        ret
-    }
+/* GetPlayerId after handle resolution; 1.27a directly uses twelve players and four neutrals. */
+BYTE *g_vm_global;
+int __cdecl player_jass_id(BYTE *pl) {
+    return pl[0x30];
 }
 /* IsUnitVisible(u, p): unit->vtbl[0xfc/4](player slot, 0, 4), callee cleans (thiscall, 3 args) */
 __declspec(naked) int __cdecl unit_visible(BYTE *u, int player_slot) {
@@ -100,9 +58,9 @@ __declspec(naked) int __cdecl unit_visible(BYTE *u, int player_slot) {
         ret
     }
 }
-/* UnitItemInSlot: inventory ability [u+0x404] -> 0x291820(u, slot), ret 4 */
+/* UnitItemInSlot: inventory ability [u+0x1f8] -> 0x6678b0(u, slot), ret 4 */
 BYTE *g_fn_slot;
-BYTE *g_fn_resolve_pair; /* 0x3fc7e0: (ecx = &ref pair) -> object or 0 */
+BYTE *g_fn_resolve_pair; /* 0x044150: (ecx = &ref pair) -> object or 0 */
 __declspec(naked) BYTE *__cdecl unit_item_in_slot(BYTE *u, int slot) {
     __asm {
         push dword ptr [esp + 8]
@@ -111,25 +69,10 @@ __declspec(naked) BYTE *__cdecl unit_item_in_slot(BYTE *u, int slot) {
         ret
     }
 }
-/* IsItemOwned (0x990f0): ref pair +0x194/+0x198 == -1 -> not owned; otherwise owned only if the
- * pair still resolves through 0x3fc7e0 (a dropped item can keep a stale pair) */
-__declspec(naked) int __cdecl item_owned(BYTE *it) {
-    __asm {
-        mov ecx, [esp + 4]
-        mov eax, [ecx + 0x198]
-        lea ecx, [ecx + 0x194]
-        and eax, [ecx]
-        cmp eax, -1
-        je none
-        call dword ptr [g_fn_resolve_pair]
-        test eax, eax
-        setne al
-        movzx eax, al
-        ret
-    none:
-        xor eax, eax
-        ret
-    }
+/* IsItemOwned (0x990f0): ref pair +0x8c/+0x90 == -1 -> not owned; otherwise owned only if the
+ * pair still resolves through 0x044150 (a dropped item can keep a stale pair) */
+int __cdecl item_owned(BYTE *it) {
+    return item127_owned(it);
 }
 float bits_to_f(int i) {
     union {
@@ -141,10 +84,10 @@ float bits_to_f(int i) {
 }
 /* Observation contents (docs/specs/observations.md; implementation: docs/design.md):
  *   fog        IsUnitVisible's check on the unit object (vtable slot 0xfc, args slot,0,4)
- *   inventory  UnitItemInSlot: [u+0x404] inventory ability -> 0x291820(u, slot); item type [+0x34],
- *              charges [+0x18c]
+ *   inventory  UnitItemInSlot: [u+0x1f8] inventory ability -> 0x6678b0(u, slot); item type [+0x30],
+ *              charges [+0x84]
  *   items      objects of registry class 'item' (0x6974656d) that are not hidden ([+0x20] & 1, IsItemVisible),
- *              not owned (IsItemOwned), and alive (GetWidgetLife's item getter reads ITEM_LIFE).
+ *              not owned (IsItemOwned), and alive (GetWidgetLife uses virtual +0x12c).
  *              Consumed power-ups can linger unowned and unhidden, with zero life.
  * IsUnitType(STRUCTURE): flags [u+0x164] & 0x10000. IsUnitType(HERO): type id's first letter is
  * upper case ([u+0x37]) and flags bit 0x40000000 is clear. GetHeroLevel: hero record [u+0x3fc],
@@ -159,22 +102,22 @@ float bits_to_f(int i) {
 #define UF_FLYING 0x20000000 /* every flyer has it (chimaera, hippogryph, gryphon, storm crow) */
 
 static DWORD unit_flags(BYTE *u) {
-    return *(DWORD *)(u + 0x164);
+    return *(DWORD *)(u + 0x5c);
 }
 static int unit_is_hero(BYTE *u) {
-    BYTE c = u[0x37];
+    BYTE c = u[0x33];
     return c >= 'A' && c <= 'Z' && !(unit_flags(u) & UF_ILLUSION);
 }
 static int unit_is_structure(BYTE *u) {
     return (unit_flags(u) & UF_STRUCTURE) != 0;
 }
 int unit_hero_level(BYTE *u) {
-    BYTE *h = *(BYTE **)(u + 0x3fc);
+    BYTE *h = *(BYTE **)(u + 0x1f0);
     int r;
     BYTE *fn = g_base + RVA_PROTECTED_INT;
     if (!unit_is_hero(u) || !h)
         return 0;
-    h += 0x70;
+    h += 0x6c;
     __asm { mov ecx, h }
     __asm {
         call fn
@@ -225,7 +168,7 @@ static __declspec(naked) int __cdecl destr_life_bits(BYTE *d) {
     }
 }
 static int item_on_ground(BYTE *it) {
-    return *(DWORD *)(it + 0x34) && !(*(DWORD *)(it + 0x20) & 1) && bits_to_f(*(int *)(it + ITEM_LIFE)) > 0 &&
+    return *(DWORD *)(it + 0x30) && !(*(DWORD *)(it + 0x20) & 1) && bits_to_f(destr_life_bits(it)) > 0 &&
            !item_owned(it);
 }
 int object_visible(BYTE *object, int cls, int player) {
@@ -238,7 +181,7 @@ int object_visible(BYTE *object, int cls, int player) {
     float x = bits_to_f(unit_xy_bits(object, 0)), y = bits_to_f(unit_xy_bits(object, 4));
     return point_visible(x, y, NATIVE(RVA_N_PLAYER, NativeI_I)(player));
 }
-static int __cdecl obs_destructable_cb(BYTE *d, void *ctx) {
+static int __fastcall obs_destructable_cb(BYTE *d, void *ctx) {
     Obs *o = (Obs *)ctx;
     if (destr_dead(d) || bits_to_f(destr_life_bits(d)) <= 0 || !object_visible(d, DESTRUCTABLE_CLASS, o->player))
         return 1;
@@ -248,7 +191,7 @@ static int __cdecl obs_destructable_cb(BYTE *d, void *ctx) {
     jw_key(w, "id");
     jw_uint(w, obs_id(d));
     jw_key(w, "type_id");
-    jw_fourcc(w, *(DWORD *)(d + 0x34));
+    jw_fourcc(w, *(DWORD *)(d + 0x30));
     jw_key(w, "x");
     jw_num(w, x);
     jw_key(w, "y");
@@ -259,7 +202,7 @@ static int __cdecl obs_destructable_cb(BYTE *d, void *ctx) {
      * row (including custom types).
      * 0x40 is the tree target class, not a type-ID list. */
     typedef DWORD(__fastcall * TargetMaskFn)(BYTE *, void *);
-    DWORD targets = ((TargetMaskFn)(g_base + 0x2ce930))(d, NULL);
+    DWORD targets = ((TargetMaskFn)(g_base + RVA_DESTRUCTABLE_TARGET_MASK))(d, NULL);
     jw_key(w, "resource");
     if (targets & 0x40)
         jw_string(w, "lumber");
@@ -298,7 +241,7 @@ static __declspec(naked) DWORD __cdecl ability_tag(BYTE *ability) {
  * whose first word is the target's object id (measured on harvest gold/tree, move and build). A build
  * order's id is the structure's type id, so ids outside the order table are written as four characters. */
 int unit_order_point(BYTE *u, unsigned *id, float *x, float *y) {
-    BYTE *ord = pair_object(u + 0x3a8);
+    BYTE *ord = pair_object(u + 0x19c);
     if (!ord || !*(DWORD *)(ord + 0x24))
         return 0;
     *id = *(DWORD *)(ord + 0x24);
@@ -307,7 +250,7 @@ int unit_order_point(BYTE *u, unsigned *id, float *x, float *y) {
     return 1;
 }
 static void write_order(JW *w, BYTE *u) {
-    BYTE *ord = pair_object(u + 0x3a8);
+    BYTE *ord = pair_object(u + 0x19c);
     unsigned id = ord ? *(DWORD *)(ord + 0x24) : 0;
     jw_key(w, "order");
     if (!id) {
@@ -346,13 +289,13 @@ static void write_production(JW *w, BYTE *u) {
     const char *state = NULL;
     float seconds = 0;
     int n = 0;
-    for (BYTE *a = pair_object(u + 0x3e8); a && n < 64; a = pair_object(a + 0x24), n++) {
+    for (BYTE *a = pair_object(u + 0x1dc); a && n < 64; a = pair_object(a + 0x24), n++) {
         DWORD tag = ability_tag(a);
         if (tag == 'Aque')
             queue = a;
         else if (tag == 'ABnP' || tag == 'AUnP') {
             state = tag == 'ABnP' ? "constructing" : "upgrading";
-            seconds = *(float *)(a + 0x7c);
+            seconds = *(float *)(a + 0x78);
         }
     }
     jw_key(w, "state");
@@ -364,11 +307,11 @@ static void write_production(JW *w, BYTE *u) {
     jw_num(w, seconds);
     jw_key(w, "queue");
     jw_open(w, '[');
-    for (int i = 0; queue && i < 7 && *(DWORD *)(queue + 0xa8 + 4 * i); i++)
-        jw_fourcc(w, *(DWORD *)(queue + 0xa8 + 4 * i));
+    for (int i = 0; queue && i < 7 && *(DWORD *)(queue + 0xa4 + 4 * i); i++)
+        jw_fourcc(w, *(DWORD *)(queue + 0xa4 + 4 * i));
     jw_close(w, ']');
     jw_key(w, "queue_seconds");
-    jw_num(w, queue && *(DWORD *)(queue + 0xa8) ? *(float *)(queue + 0x7c) : 0);
+    jw_num(w, queue && *(DWORD *)(queue + 0xa4) ? *(float *)(queue + 0x78) : 0);
 }
 
 /* Every ability on the unit's chain that it has learned, with the live numbers the natives give:
@@ -412,7 +355,7 @@ static void write_abilities(JW *w, BYTE *u) {
     jw_key(w, "abilities");
     jw_open(w, '[');
     int n = 0;
-    for (BYTE *a = handle ? pair_object(u + 0x3e8) : NULL; a && n < 64; a = pair_object(a + 0x24), n++) {
+    for (BYTE *a = handle ? pair_object(u + 0x1dc) : NULL; a && n < 64; a = pair_object(a + 0x24), n++) {
         DWORD aid = ability_tag(a);
         if ((BYTE)(aid >> 24) == 'B')
             continue; /* a buff: write_buffs */
@@ -427,11 +370,11 @@ static void write_abilities(JW *w, BYTE *u) {
         jw_key(w, "level");
         jw_int(w, level);
         jw_key(w, "mana_cost");
-        jw_int(w, NATIVE(RVA_N_ABILITYMANACOST, NativeI_HII)(handle, (int)aid, level));
+        jw_int(w, ability127_mana(a, level));
         jw_key(w, "cooldown_seconds");
-        jw_num(w, bits_to_f(NATIVE(RVA_N_ABILITYCOOLDOWN, NativeI_HII)(handle, (int)aid, level)));
+        jw_num(w, ability127_cooldown(a, level));
         jw_key(w, "cooldown_remaining");
-        jw_num(w, bits_to_f(NATIVE(RVA_N_ABILITYCOOLDOWNLEFT, NativeI_HI)(handle, (int)aid)));
+        jw_num(w, ability127_remaining(a, 0));
         jw_close(w, '}');
     }
     jw_close(w, ']');
@@ -445,7 +388,7 @@ static void write_buffs(JW *w, BYTE *u) {
     jw_key(w, "buffs");
     jw_open(w, '[');
     int n = 0;
-    for (BYTE *a = pair_object(u + 0x3e8); a && n < 64; a = pair_object(a + 0x24), n++) {
+    for (BYTE *a = pair_object(u + 0x1dc); a && n < 64; a = pair_object(a + 0x24), n++) {
         DWORD bid = ability_tag(a);
         if ((BYTE)(bid >> 24) != 'B')
             continue;
@@ -458,7 +401,7 @@ static void write_buffs(JW *w, BYTE *u) {
     jw_close(w, ']');
 }
 
-static int __cdecl obs_unit_cb(BYTE *u, void *ctx) {
+static int __fastcall obs_unit_cb(BYTE *u, void *ctx) {
     Obs *o = (Obs *)ctx;
     float life = bits_to_f(unit_state_bits(u, 0));
     BYTE *pl = unit_owner(u);
@@ -481,7 +424,7 @@ static int __cdecl obs_unit_cb(BYTE *u, void *ctx) {
             jw_key(w, "unit_id");
             jw_uint(w, obs_id(u));
             jw_key(w, "type_id");
-            jw_fourcc(w, *(DWORD *)(u + 0x34));
+            jw_fourcc(w, *(DWORD *)(u + 0x30));
             jw_key(w, "x");
             jw_num(w, bits_to_f(unit_xy_bits(u, 0)));
             jw_key(w, "y");
@@ -495,7 +438,7 @@ static int __cdecl obs_unit_cb(BYTE *u, void *ctx) {
     }
     if (!unit_visible(u, o->slot))
         return 1;
-    DWORD type = *(DWORD *)(u + 0x34);
+    DWORD type = *(DWORD *)(u + 0x30);
     float x = bits_to_f(unit_xy_bits(u, 0)), y = bits_to_f(unit_xy_bits(u, 4));
     int maxhp = (int)bits_to_f(unit_state_bits(u, 1)), mana = (int)bits_to_f(unit_state_bits(u, 2)),
         maxmana = (int)bits_to_f(unit_state_bits(u, 3));
@@ -534,7 +477,7 @@ static int __cdecl obs_unit_cb(BYTE *u, void *ctx) {
         write_abilities(w, u);
     }
     jw_close(w, '}');
-    if (own && *(BYTE **)(u + 0x404)) {
+    if (own && *(BYTE **)(u + 0x1f8)) {
         for (int slot = 0; slot < 6; slot++) {
             BYTE *it = unit_item_in_slot(u, slot);
             if (!it)
@@ -546,15 +489,15 @@ static int __cdecl obs_unit_cb(BYTE *u, void *ctx) {
             jw_key(w, "slot");
             jw_int(w, slot);
             jw_key(w, "type_id");
-            jw_fourcc(w, *(DWORD *)(it + 0x34));
+            jw_fourcc(w, *(DWORD *)(it + 0x30));
             jw_key(w, "charges");
-            jw_int(w, *(int *)(it + 0x18c));
+            jw_int(w, *(int *)(it + 0x84));
             jw_close(w, '}');
         }
     }
     return 1;
 }
-static int __cdecl obs_item_cb(BYTE *it, void *ctx) {
+static int __fastcall obs_item_cb(BYTE *it, void *ctx) {
     Obs *o = (Obs *)ctx;
     JW *w = &o->items;
     if (!item_on_ground(it))
@@ -566,7 +509,7 @@ static int __cdecl obs_item_cb(BYTE *it, void *ctx) {
     jw_key(w, "item_id");
     jw_uint(w, obs_id(it));
     jw_key(w, "type_id");
-    jw_fourcc(w, *(DWORD *)(it + 0x34));
+    jw_fourcc(w, *(DWORD *)(it + 0x30));
     jw_key(w, "x");
     jw_num(w, x);
     jw_key(w, "y");
@@ -578,22 +521,7 @@ static int __cdecl obs_item_cb(BYTE *it, void *ctx) {
 /* the internal slot of a JASS player id, as the Player native (0xa4240) maps it: on a map whose
  * script version is below 0x17ac the neutral ids 12..15 are slots 24..27, otherwise identity.
  * The same version read as player_jass_id, which is this mapping's inverse. */
-__declspec(naked) int __cdecl script_version(void) {
-    __asm {
-        mov eax, dword ptr [g_vm_global]
-        mov eax, [eax]
-        mov ecx, [eax + 0x30]
-        lea ecx, [ecx + 0x24]
-        call dword ptr [g_fn_ctx]
-        push eax
-        call dword ptr [g_fn_ver]
-        add esp, 4
-        ret
-    }
-}
 int player_slot(int jass_id) {
-    if (jass_id >= 12 && jass_id <= 15 && (unsigned)script_version() < 0x17ac)
-        return jass_id + 12;
     return jass_id;
 }
 
@@ -603,8 +531,6 @@ void accessors_init(void) {
     g_fn_state = g_base + RVA_UNIT_STATE;
     g_fn_unpack = g_base + RVA_POS_UNPACK;
     g_vm_global = g_base + RVA_VM_GLOBAL;
-    g_fn_ctx = g_base + RVA_VM_STR_CTX;
-    g_fn_ver = g_base + RVA_SCRIPT_VERSION;
     g_fn_slot = g_base + RVA_ITEM_IN_SLOT;
     g_fn_resolve_pair = g_base + RVA_RESOLVE_PAIR;
 }
@@ -726,7 +652,7 @@ static void result_set(int jass_id, const char *result) {
     }
 }
 typedef void(__cdecl *RemovePlayerFn)(int player, int result);
-typedef BYTE *(__cdecl *PlayerObjectFn)(int player);
+typedef BYTE *(__fastcall *PlayerObjectFn)(int player);
 static RemovePlayerFn RemovePlayer_orig;
 static void __cdecl RemovePlayer_hook(int player, int result) {
     BYTE *pl = ((PlayerObjectFn)(g_base + RVA_PLAYER_OBJECT))(player);

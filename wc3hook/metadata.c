@@ -2,19 +2,6 @@
  * RVAs/prototypes verified with tools/natives.py on the supported executable. */
 #include "wc3hook.h"
 
-#define N_NEUTRAL_AGGRESSIVE 0x094680
-#define N_PLAYER_TEAM 0x094b80
-#define N_PLAYER_ALLIANCE 0x0944c0
-#define N_PLAYER_ALLY 0x099510
-#define N_PLAYER_ENEMY 0x099580
-#define N_PLAYER_SCORE 0x094710
-#define N_WORLD_BOUNDS 0x097ef0
-#define N_RECT_MIN_X 0x095080
-#define N_RECT_MIN_Y 0x0950a0
-#define N_RECT_MAX_X 0x095040
-#define N_RECT_MAX_Y 0x095060
-#define N_REMOVE_RECT 0x0a51e0
-
 typedef int(__cdecl *N0)(void);
 typedef int(__cdecl *N3)(int, int, int);
 
@@ -63,7 +50,7 @@ static const char *SCORES[] = {"units_trained",
 
 void metadata_write(JW *w, int observer) {
     int own = NATIVE(RVA_N_PLAYER, NativeI_I)(observer);
-    int neutral = NATIVE(N_NEUTRAL_AGGRESSIVE, N0)();
+    int neutral = 12; /* 1.27a has twelve playing and four neutral slots. */
     jw_key(w, "players");
     jw_open(w, '[');
     for (int p = 0; p < neutral + 4; p++) {

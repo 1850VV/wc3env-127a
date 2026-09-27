@@ -12,6 +12,7 @@ double g_speed = 1.0;
 volatile LONG g_frozen = 0;
 static CRITICAL_SECTION g_clock_lock; /* writers only (speed, freeze); readers never block */
 LONGLONG g_qpc_freq;
+static ClockBindings g_clock_bindings;
 
 /* Anchor of the virtual clock: virtual = virt0 + (real - real0) * speed, or a constant while
  * frozen. Published through a seqlock: the timer hooks run on every thread of the process,
@@ -146,7 +147,7 @@ static void patch_rdtsc(void) {
     QueryPerformanceCounter(&q1);
     t1 = __rdtsc();
     g_tsc_per_qpc = (double)(t1 - t0) / (double)(q1.QuadPart - q0.QuadPart);
-    BYTE *p = g_base + RVA_RDTSC_HELPER;
+    BYTE *p = g_base + g_clock_bindings.rdtsc_helper;
     DWORD old;
     if (p[0] != 0x0f || p[1] != 0x31 || p[2] != 0xc3) {
         hook_log("unsupported rdtsc helper");
@@ -217,8 +218,9 @@ DWORD real_wait(HANDLE event, DWORD ms) {
  * native after 15-25 minutes of realtime games), so its own caller is checked as well: the wrapper
  * pushed ebp, its two arguments and our return address, so its return address is 16 bytes up. */
 static DWORD WINAPI WFSO_hook(HANDLE h, DWORD ms) {
-    if ((BYTE *)_ReturnAddress() == g_base + RVA_FRAME_WAIT_RET && g_game_tid && GetCurrentThreadId() == g_game_tid &&
-        *(BYTE **)((BYTE *)_AddressOfReturnAddress() + 16) == g_base + RVA_FRAME_LOOP_WAIT_RET)
+    if (g_clock_bindings.frame_wait_ret && (BYTE *)_ReturnAddress() == g_base + g_clock_bindings.frame_wait_ret &&
+        g_game_tid && GetCurrentThreadId() == g_game_tid &&
+        *(BYTE **)((BYTE *)_AddressOfReturnAddress() + 16) == g_base + g_clock_bindings.frame_loop_wait_ret)
         rpc_service_jobs_between_frames();
     return WFSO_orig(h, scale_timeout(ms));
 }
@@ -247,6 +249,12 @@ static void wait_init_hooks(void) {
 }
 
 void clock_init_hooks(void) {
+    const ClockBindings bindings = {RVA_RDTSC_HELPER, RVA_FRAME_WAIT_RET, RVA_FRAME_LOOP_WAIT_RET};
+    clock_init_hooks_for(&bindings);
+}
+
+void clock_init_hooks_for(const ClockBindings *bindings) {
+    g_clock_bindings = *bindings;
     LARGE_INTEGER f;
     QueryPerformanceFrequency(&f);
     g_qpc_freq = f.QuadPart;

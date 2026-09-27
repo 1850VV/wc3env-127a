@@ -13,8 +13,6 @@ from tests.rpc_contract import RpcContract
 from wc3env.game import launch
 from wc3env.rpc import RpcClient
 
-ENEMY_BASE = (-5184.0, 2944.0)
-
 
 class DllContractTest(RpcContract, unittest.TestCase):
     @classmethod
@@ -53,7 +51,9 @@ class DllContractTest(RpcContract, unittest.TestCase):
         c.debug("speed", factor=64)
         c.debug("waitfloor", ms=1)
         c.debug("invulnerable", player=0, on=1)
-        c.debug("spawn", type_id="hkni", player=0, x=ENEMY_BASE[0] + 984, y=ENEMY_BASE[1] - 44, n=24)
+        hall = next(u for u in c.observe(1)["units"] if u["structure"])
+        enemy_base = hall["x"], hall["y"]
+        c.debug("spawn", type_id="hkni", player=0, x=enemy_base[0] + 984, y=enemy_base[1] - 44, n=24)
         for _ in range(120):
             c.step(2500)
             if c.status == "ended":
@@ -62,10 +62,10 @@ class DllContractTest(RpcContract, unittest.TestCase):
             targets = [u for u in o["visible_enemies"] if u["owner"] == 1]
             structures = [u for u in targets if u["structure"]] or targets
             if structures:
-                t = min(structures, key=lambda u: (u["x"] - ENEMY_BASE[0]) ** 2 + (u["y"] - ENEMY_BASE[1]) ** 2)
+                t = min(structures, key=lambda u: (u["x"] - enemy_base[0]) ** 2 + (u["y"] - enemy_base[1]) ** 2)
                 x, y = t["x"], t["y"]
             else:
-                x, y = ENEMY_BASE
+                x, y = enemy_base
             knights = [u for u in o["units"] if u["type_id"] == "hkni"]
             if knights:
                 c.act(
@@ -127,13 +127,18 @@ class DllContractTest(RpcContract, unittest.TestCase):
         hx, hy = hall["x"], hall["y"]
         own = c.debug("spawn", type_id="hfoo", player=0, x=hx + 300, y=hy - 500)["unit_ids"][0]
         near = c.debug("spawn", type_id="ogru", player=1, x=hx - 300, y=hy - 500)["unit_ids"][0]  # in player 0's sight
-        far = c.debug("spawn", type_id="ogru", player=1, x=ENEMY_BASE[0] + 400, y=ENEMY_BASE[1] - 400)["unit_ids"][0]
+        enemy_hall = next(u for u in c.observe(1)["units"] if u["structure"])
+        far = c.debug("spawn", type_id="ogru", player=1, x=enemy_hall["x"] + 400, y=enemy_hall["y"] - 400)["unit_ids"][
+            0
+        ]
         c.step(250)
         c.observe(0)
         c.observe(1)
         c.debug("kill", unit_id=near)
         c.debug("kill", unit_id=far)
-        c.step(250)
+        # Fog is recomputed periodically; let the dead grunt's last sight expire
+        # before testing an event that must be private to the surviving player.
+        c.step(2000)
         c.debug("kill", unit_id=own)
         c.step(250)  # after `near` is gone: no orc eyes on the footman
 

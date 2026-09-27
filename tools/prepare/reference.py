@@ -1,10 +1,11 @@
 """Generate a reusable, versioned reference from the licensed installation."""
 
 import csv
+import json
 import re
 from pathlib import Path
 
-from wc3env.compatibility import verify_executable
+from wc3env.compatibility import GAME_VERSION, verify_executable
 from wc3env.settings import settings
 
 from .artifacts import write_json
@@ -13,9 +14,24 @@ from .pathing import footprints
 from .source_catalog import SourceCatalog, field, identifiers
 
 
-def prepare_reference(output, game_dir=None):
+def preserve_names(value, source):
+    """Retain existing command names by identity; never copy gameplay values."""
+    if isinstance(value, dict) and isinstance(source, dict):
+        for key, child in value.items():
+            if key in ("name", "names") and key in source:
+                value[key] = source[key]
+            elif key in source:
+                preserve_names(child, source[key])
+    elif isinstance(value, list) and isinstance(source, list):
+        indexed = {item["ability_id"]: item for item in source if isinstance(item, dict) and "ability_id" in item}
+        for item in value:
+            if isinstance(item, dict) and item.get("ability_id") in indexed:
+                preserve_names(item, indexed[item["ability_id"]])
+
+
+def prepare_reference(output, game_dir=None, names_from=None):
     game_dir = Path(game_dir) if game_dir is not None else settings().game_dir
-    verify_executable(game_dir / "Warcraft III.exe")  # the pinned build is the one the data describes
+    verify_executable(game_dir / "War3.exe")  # the pinned executable/engine pair is the one the data describes
     catalog = SourceCatalog.load(game_dir)
     abilities = {}
     for raw, row in catalog.abilities.items():
@@ -48,6 +64,7 @@ def prepare_reference(output, game_dir=None):
         upgrade_defs[raw] = {"names": [catalog.text(t) for t in titles], **catalog.upgrade(raw)}
     result = {
         "schema_version": 1,
+        "game_version": GAME_VERSION,
         "units": {raw: catalog.unit(raw) for raw in sorted(catalog.units)},
         "footprints": footprints(catalog.units, game_dir),
         "abilities": abilities,
@@ -56,6 +73,8 @@ def prepare_reference(output, game_dir=None):
         "upgrades": upgrade_defs,
         "damage_multipliers": catalog.damage_multipliers,
     }
+    if names_from is not None:
+        preserve_names(result, json.loads(Path(names_from).read_text(encoding="utf-8")))
     write_json(output, result)
     print(
         f"Reference: {output} ({len(result['units'])} units, {len(abilities)} abilities, "

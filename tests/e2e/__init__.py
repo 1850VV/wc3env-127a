@@ -14,4 +14,6 @@ os.environ["WC3_SOUND"] = "0"
 settings.cache_clear()
 
 if not settings().game_exe.is_file():
-    raise unittest.SkipTest(f"No Warcraft III.exe in {settings().game_dir}; set WC3_GAME_DIR (see .env.example)")
+    raise unittest.SkipTest(
+        f"No {settings().game_exe.name} in {settings().game_dir}; set WC3_GAME_DIR (see .env.example)"
+    )

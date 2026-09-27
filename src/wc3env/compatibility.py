@@ -6,13 +6,20 @@ import hashlib
 import struct
 from pathlib import Path
 
-GAME_VERSION = "1.29.2.9231"
-EXE_SHA256 = "3f2ed0120d80578bf07e4423296dade1adfb959d59a2d20a7584224559570eed"
+GAME_VERSION = "1.27.0.52240"
+EXE_SHA256 = "ea8f5192efede23f84bc60140c2d4a0085ea68b86f430c1d60c354a555922def"
+ENGINE_SHA256 = "e04d1716603c075eb0c8e1e21cf1093a664adc5249efab396bfa08d7b09d0c3a"
 
 
 def verify_executable(path: Path) -> str:
     if not path.is_file():
         raise FileNotFoundError(f"No Warcraft III executable at {path}; set WC3_GAME_DIR (see .env.example)")
+    digest = _verify_image(path, EXE_SHA256)
+    _verify_image(path.with_name("Game.dll"), ENGINE_SHA256)
+    return digest
+
+
+def _verify_image(path: Path, expected: str) -> str:
     data = path.read_bytes()
     try:
         pe = struct.unpack_from("<I", data, 0x3C)[0]
@@ -25,10 +32,10 @@ def verify_executable(path: Path) -> str:
     except struct.error:
         valid = False
     digest = hashlib.sha256(data).hexdigest()
-    if not valid or digest != EXE_SHA256:
+    if not valid or digest != expected:
         raise ValueError(
             f"Unsupported Warcraft executable: {path}. This adapter requires the verified "
-            f"32-bit {GAME_VERSION} binary (SHA-256 {EXE_SHA256}); found {digest}. "
+            f"32-bit {GAME_VERSION} binary (SHA-256 {expected}); found {digest}. "
             "No process was started. Other binaries need a verified adapter."
         )
     return digest

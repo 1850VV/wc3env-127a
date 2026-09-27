@@ -23,13 +23,20 @@ class LaunchTest(unittest.TestCase):
             game_dir=self.root,
             map=self.map,
             user_dir=self.root / "Users",
-            game_exe=self.root / "Warcraft.exe",
+            game_exe=self.root / "War3.exe",
             output_dir=None,
             sound=True,
         )
         settings = patch("wc3env.game.settings", return_value=self.cfg)
         settings.start()
         self.addCleanup(settings.stop)
+        # Exercise actual runtime isolation/copies while replacing only binary
+        # identity verification: these fixture files are deliberately not a game.
+        (self.root / "War3.exe").write_bytes(b"fixture launcher")
+        (self.root / "Game.dll").write_bytes(b"fixture engine")
+        verifier = patch("wc3env.runtime.verify_executable")
+        verifier.start()
+        self.addCleanup(verifier.stop)
 
     @patch("wc3env.game.HookPipe")
     @patch("wc3env.game.launch_with_dll", return_value=(123, 456))
@@ -41,6 +48,10 @@ class LaunchTest(unittest.TestCase):
             self.assertTrue(game.data_dir.is_dir())
             self.assertEqual(game.data_dir.parent, output)
             self.assertEqual(call.kwargs["env"]["WC3HOOK_DOCS"], str(game.data_dir))
+            executable = call.args[0]
+            self.assertEqual(executable.parent, game.data_dir / "Runtime")
+            self.assertEqual(executable.read_bytes(), b"fixture launcher")
+            self.assertEqual((executable.parent / "Maps" / self.map.name).read_bytes(), self.map.read_bytes())
         self.assertFalse((self.root / "wc3env").exists())
 
     def test_map_names_resolve_to_one_file(self):

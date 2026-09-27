@@ -65,8 +65,11 @@ class ActionExtensionsTest(unittest.TestCase):
         self.assertIn("ninf", {u["type_id"] for u in obs["units"]})
 
     def test_sacrifice_converts_an_acolyte_into_a_shade(self):
-        pit = self.spawn("usap", dx=-600, dy=-800)
-        acolyte = self.spawn("uaco", dx=-350, dy=-800)
+        # Place toward the map centre: a fixed westward offset embeds the pit
+        # in the forest when 1.27a assigns this player the western start.
+        direction = 1 if self.home["x"] < 0 else -1
+        pit = self.spawn("usap", dx=direction * 600, dy=-800)
+        acolyte = self.spawn("uaco", dx=direction * 350, dy=-800)
         self.cast(acolyte, "requestsacrifice", target_id=pit)
         for _ in range(60):
             self.c.step(500)

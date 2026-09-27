@@ -4,9 +4,8 @@
 
 volatile LONG g_trace, g_trace_n; /* `trace 1`: log who starts an action buffer */
 
-/* ---- command-queue hunt: CDataStore::PutByte at 0x5ce80 (thiscall, ret 4) is how the game
- * serialises everything, including replay time slots (0x1b09e0 <- turn consumer 0x1a86b0) and,
- * presumably, the UI's outgoing actions. With `trace 1`, a byte that is a W3G action opcode
+/* ---- command-queue hunt: CDataStore::PutByte at 0x04df50 (thiscall, ret 4) is how the game
+ * serialises byte values, including the UI's outgoing actions. With `trace 1`, a byte that is a W3G action opcode
  * written as the FIRST byte of a store ([this+0x10] == 0) logs the writer's stack: that is the
  * producer, not the replay copy (which lands mid-stream). */
 typedef BYTE *(__fastcall *PutByteFn)(BYTE *self, void *edx, BYTE b);
@@ -23,19 +22,19 @@ static BYTE *__fastcall PutByte_hook(BYTE *self, void *edx, BYTE b) {
 
 /* ---- the player command queue (design.md: one order path) --------------------------------------
  * A UI action (click, hotkey, selection) becomes a W3G action record and goes through
- * QueueLocalAction at 0x1ae190(store, player): checks the player is the local one and in game,
+ * QueueLocalAction at RVA_QUEUE_ACTION(store, connection): checks the player is the local one and in game,
  * takes the bytes out of a CDataStore, and appends them to the game's outgoing store
- * (game+0x2040) that the network layer sends with the next turn; every client applies them at
- * the same turn. The UI builds the store on its stack: 0x18-byte header (vtable 0xa78c2c,
+ * (game+GAME_OUT_STORE) that the network layer sends with the next turn; every client applies them at
+ * the same turn. The UI builds the store on its stack: 0x18-byte header (vtable 0x95211c,
  * +4 data ptr, +8 base, +0xc capacity, +0x10 size, +0x14 -1) with a 1460-byte inline buffer,
- * ctor 0xd7140(&ptr, &base, &cap), PutByte 0x5ce80 / PutData 0x5d230, dtor 0xd7040. Found by
+ * ctor 0x04df40(&ptr, &base, &cap), PutByte 0x04df50 / PutData 0x04e350, dtor 0x04de90. Found by
  * tracing who writes opcode 0x16 first into a fresh store (the `trace` command).
  * Records are queued here and the game thread sends them on its next GameUpdate.
  * Record formats are the replay ones (w3g_format): 16 mode count (idA idB)* = selection,
  * 12 flags orderid ff*8 x y = point order, 13 ... + targetA targetB = target order. */
 typedef void(__fastcall *StoreCtorFn)(BYTE *self, void *edx, DWORD *ptr, DWORD *base, DWORD *cap);
 typedef BYTE *(__fastcall *PutDataFn)(BYTE *self, void *edx, const void *p, DWORD len);
-typedef void(__cdecl *QueueActionFn)(BYTE *store, int player);
+typedef void(__fastcall *QueueActionFn)(BYTE *store, int player);
 static QueueActionFn QueueAction_orig;
 /* Grow each player's buffer as needed. Game thread only. */
 #define ACT_RECORDS 10
@@ -129,7 +128,7 @@ void act_flush(void) {
 }
 
 /* with `trace 1`, every record the UI queues is logged in full (the reference for our own) */
-static void __cdecl QueueAction_hook(BYTE *store, int player) {
+static void __fastcall QueueAction_hook(BYTE *store, int player) {
     if (g_trace) {
         BYTE *d = *(BYTE **)(store + 4);
         DWORD n = *(DWORD *)(store + 0x10);
@@ -145,8 +144,8 @@ static void __cdecl QueueAction_hook(BYTE *store, int player) {
 }
 
 void act_init_hooks(void) {
-    MH_CreateHook(g_base + RVA_QUEUE_ACTION, (void *)QueueAction_hook, (void **)&QueueAction_orig);
-    MH_CreateHook(g_base + RVA_PUTBYTE, (void *)PutByte_hook, (void **)&PutByte_orig);
+    MH_CreateHook(g_base + RVA_PUTBYTE, PutByte_hook, (void **)&PutByte_orig);
+    MH_CreateHook(g_base + RVA_QUEUE_ACTION, QueueAction_hook, (void **)&QueueAction_orig);
 }
 
 /* ---- the RPC's act: protocol actions -> W3G records (the shapes captured from the UI with `trace 1`) ----
@@ -167,7 +166,7 @@ typedef struct {
     long long id;
     BYTE *object;
 } FindObject;
-static int __cdecl find_cb(BYTE *o, void *ctx) {
+static int __fastcall find_cb(BYTE *o, void *ctx) {
     FindObject *find = (FindObject *)ctx;
     if ((long long)obs_id(o) == find->id) {
         find->object = o;
@@ -246,7 +245,7 @@ static void rec_subgroup(BYTE *u) {
     BYTE b[16];
     int k = 0;
     b[k++] = 0x19;
-    k = put_u32(b, k, *(DWORD *)(u + 0x34));
+    k = put_u32(b, k, *(DWORD *)(u + 0x30));
     k = put_pair(b, k, u);
     act_enqueue(b, k);
 }
@@ -306,13 +305,11 @@ static void rec_use_item(int slot, BYTE *item, unsigned flags) {
     act_enqueue(b, k);
 }
 
-/* Give or drop an item through the natives UnitDropItemTarget (0xaf130: a unit takes it, a shop buys it)
- * and UnitDropItemPoint (0xaf050: onto the ground), found by their registration in the executable. The
+/* Give or drop an item through the natives UnitDropItemTarget (0x1facf0: a unit takes it, a shop buys it)
+ * and UnitDropItemPoint (0x1fac20: onto the ground), found by their registration in the executable. The
  * unit walks there first, as for a player's drag. The W3G record for it (0x13) was sent as documented and
  * the game ignored it; the natives change the game directly, so a drop is not in the saved replay, like
  * debug staging. Game thread. */
-#define RVA_N_DROP_ITEM_TARGET 0x0af130 /* UnitDropItemTarget (Hunit;Hitem;Hwidget;)B */
-#define RVA_N_DROP_ITEM_POINT 0x0af050  /* UnitDropItemPoint (Hunit;Hitem;RR)B */
 typedef int(__cdecl *DropFn)(int, int, int);
 typedef int(__cdecl *DropAtFn)(int, int, const float *, const float *);
 static int drop_item(BYTE *unit, BYTE *item, float x, float y, BYTE *target) {

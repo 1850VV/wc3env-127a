@@ -1,4 +1,4 @@
-# wc3env
+# wc3env for Warcraft III 1.27a
 
 A gym-style environment for real Warcraft III Legacy on Windows. An injected DLL provides
 deterministic stepping, fog-filtered observations and native commands on stock maps, with
@@ -23,11 +23,9 @@ with WC3Env(GameConfig(map="(2)EchoIsles.w3x", step_ms=1000)) as env:
 
 ## Setup
 
-1. Install **Warcraft III - Legacy TFT 1.29** from the Game Version dropdown in Battle.net
-   ([announcement](https://us.forums.blizzard.com/en/warcraft3/t/warcraft-iii-legacy-the-frozen-throne-129-now-available/38037)).
-   The supported build is `1.29.2.9232-legacy-tft`; the launcher verifies the executable's
-   SHA-256 before injecting. The client also needs its activation files (`roc.w3k`,
-   `tft.w3k`) in the installation folder, or it opens a CD-key dialog.
+1. Use your local **Warcraft III 1.27a, x86 build 1.27.0.52240** installation.
+   This fork verifies both `War3.exe` and `Game.dll` before injection; see the exact
+   hashes and acceptance evidence in [the port report](docs/port-127a.md).
 2. Use Windows x64, 64-bit Python 3.11+ and Visual Studio Build Tools (Desktop development
    with C++) to build the 32-bit hook.
 3. Copy [.env.example](.env.example) to `.env` and set `WC3_GAME_DIR`.
@@ -40,8 +38,7 @@ python -m tests.e2e                             # real game, ~3 min; skipped wit
 ```
 
 `render=False` still needs Direct3D 9 and a window/device; see
-[rendering and input](docs/design.md#rendering-and-input). Linux workers run the same
-environment under Wine: see [docker/](docker/README.md).
+[rendering and input](docs/design.md#rendering-and-input). The 1.27a port is validated on Windows; the inherited Docker/Wine workflow has not been validated for this build.
 
 ## Use
 
@@ -86,6 +83,7 @@ python -m wc3agent melee --race orc --difficulty insane --realtime # a full game
 | [Design](docs/design.md) | How stepping, commands, observations, reset and rendering work |
 | [RPC](docs/specs/protocol.md) · [Observations](docs/specs/observations.md) · [Actions](docs/specs/actions.md) · [Configuration](docs/specs/configuration.md) | Contracts |
 | [Compatibility](docs/compatibility.md) | What has been measured, and on what |
+| [1.27a port and acceptance](docs/port-127a.md) | Supported binaries, native validation and installation package |
 | [Roadmap](docs/roadmap.md) | Unfinished work |
 | [Contributing](CONTRIBUTING.md) | Build, test and change guidelines |
 

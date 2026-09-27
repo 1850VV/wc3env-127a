@@ -8,20 +8,17 @@ Contracts: [RPC](specs/protocol.md), [observations](specs/observations.md),
 
 ## Compatibility
 
-Supported: offline Warcraft III on Windows x64 with 64-bit Python 3.11+.
-Battle.net's **1.29.2.9232-legacy-tft** package contains the x86 **1.29.2.9231** executable.
-The launcher verifies this SHA-256 before injection:
+Supported in this fork: offline Warcraft III **1.27a, x86 1.27.0.52240**, on Windows x64
+with 64-bit Python 3.11+. The launcher validates the PE architecture and full SHA-256
+of both `War3.exe` and `Game.dll` before injection. Exact identities and current
+live evidence are in [the port report](port-127a.md). Other binaries need verified
+bindings and calling conventions, not a changed hash or version label.
 
-```text
-3f2ed0120d80578bf07e4423296dade1adfb959d59a2d20a7584224559570eed
-```
-
-This pairing was checked on 2026-09-17 against local `.build.info`, the executable and
-[Blizzard's metadata](https://us.version.battle.net/v2/products/w3-legacy-tft/versions).
-See the [Legacy announcement](https://us.forums.blizzard.com/en/warcraft3/t/warcraft-iii-legacy-the-frozen-throne-129-now-available/38037)
-and [9232 patch notes](https://us.forums.blizzard.com/en/warcraft3/t/warcraft-iii-legacy-the-frozen-throne-129-now-available/38037/4).
-Other binaries need a verified port of the offsets and calling conventions in
-[`wc3hook.h`](../wc3hook/wc3hook.h), not a changed version label.
+The bootstrap installs API hooks before `War3.exe` resumes. A LoadLibraryA detour
+installs engine hooks when `Game.dll` appears, before its entry point is called.
+Each process gets a private runtime containing copied executable/DLL images,
+read-only game archives shared by hardlink when possible, copied selected maps,
+and independent Replay/Save/log files. Original installation files are not edited.
 
 Maps accept absolute paths, install-relative paths or unique filenames under `Maps/`.
 The loaded map establishes active slots, controllers, races and starting state;
@@ -56,7 +53,7 @@ The game holds at **1000 ms** before `create_game` validates setup and selects s
 realtime. States are `launched -> in_game -> ended`; final observations remain readable.
 Each player's result is retained; the session ends when all agents have results.
 
-Reset calls `RestartGame(false)` (`0x0a5620`) to reload the same map in-process. Unregister
+Reset calls `RestartGame(false)` (`0x1f31e0`) to reload the same map in-process. Unregister
 added agent identities first: retaining them stalls teardown. Check membership before
 unregistering. Clear actions, selections, events, results, staging and game/TLS pointers;
 preserve hooks, pipe, speed, wait floor and rendering settings. Ignore teardown results and
@@ -69,23 +66,20 @@ Stepping replay playback stops at the recorded duration and preserves final obse
 EOF does not invent player results. Actions come from the recording. Session reset relaunches
 the replay: `RestartGame` is a map reload, not a replay restart.
 
-Moved native reallocations use the current matching arena (`allocator.c`), following normal
-`SMemAlloc` selection. This prevents old full arenas from repeatedly reserving new ones.
-On a failed free-space search, check the remaining size bins and merge adjacent free blocks
-before growing. Native allocation, copying, freeing and group locks remain intact. UI teardown
-unregisters its two forgotten input handlers; at the new hold, native rehashing reclaims retired
-connection subscriptions after dispatch unwinds. Live text caches retain their buffers.
+The 1.27a native allocator passes the 2,048-unit regression without the predecessor's
+binary-specific allocator or UI teardown patches. Those 1.29 detours are not installed.
+The default 32-episode process recycling policy bounds retained engine/GPU caches.
 
 ## Time and command delivery
 
-QPC, GetTickCount, FILETIME and the `rdtsc` helper (`0x396c80`) share a virtual clock.
+QPC, GetTickCount, FILETIME and the `rdtsc` helper (`0x154d20`) share a virtual clock.
 Seqlock readers avoid blocking timer calls inside other libraries. Integer conversions
 divide before multiplying to avoid overflow. Speed scales finite waits; frozen waits keep
 a 1 ms floor. RPC deadlines use real time.
 
-`GameUpdate` (`0x1aefd0`) consumes 25 ms turns. Stepping writes pending time and passes zero
+`GameUpdate` (`0x30ff00`) consumes 25 ms turns. Stepping writes pending time and passes zero
 elapsed time to bypass the lag clamp. Publish the producer budget after actions flush.
-The offline host (`0x557be0`) emits that budget, at most 400 ms per packet; account time
+The offline host (`0x874a10`) emits that budget, at most 400 ms per packet; account time
 before transmission and reset the total with its native counter. Warcraft retains sequencing,
 delivery and acknowledgements. Realtime uses native scheduling. Receiver-side credit trimming
 caused stalls; 1x settling only hid queued backlog.
@@ -95,21 +89,20 @@ progress, not total duration. Replies report elapsed time and completion reason;
 reject unexplained short steps, and pools retire stalled games.
 
 Actions use Warcraft's command parser. Offline agents send zero-time packets through
-`0x1aab40`, splitting at record boundaries. `QueueLocalAction` (`0x1ae190`) stamps the local
+`0x30ba60`, splitting at record boundaries. `QueueLocalAction` (`0x30f1b0`) stamps the local
 wire identity and remains the UI path. Register missing identities through the native table
-(`0x1a5820`, `0x1b1990`); suppress startup AI without changing human/computer slot types.
+(`0x306e60`, `0x312810`); suppress startup AI without changing human/computer slot types.
 Selection history stores IDs, not pointers, and clears before another unit is selected.
 Acceptance means queued; Warcraft still applies range, resource and ability rules.
 
 ## Observations and events
 
-Enumerate objects (`0x3f4ba0`) without allocating JASS handles. RPC IDs use the object's
+Enumerate objects (`0x02f230`) without allocating JASS handles. RPC IDs use the object's
 `+0xc` ID; internal references also need its `+0x10` salt. Lookup has no fixed object-count
-cap. Exclude hidden, loaded and Locust units and apply each observer's fog. Old map scripts
-map neutral JASS IDs 12–15 to internal slots 24–27.
+cap. Exclude hidden, loaded and Locust units and apply each observer's fog. The twelve playing slots and four neutral slots use IDs 0–15 directly.
 
-Hook event dispatch (`0x0bcd00`) and its registration check (`0x43f0c0`). Spell effects need
-their firing hook (`0x0bbd60`) while the ability is valid. Snapshot values and visibility
+Hook event dispatch (`0x245080`) and its registration check (`0x0566d0`). Spell effects need
+their firing hook (`0x244300`) while the ability is valid. Snapshot values and visibility
 before objects change; retain no game pointers. Death ownership precedes defeat transfers;
 summon's trigger unit is the summoned unit. Each observer has a bounded visible-event
 history: hidden activity affects neither retention nor loss counts. Never infer death from
@@ -134,11 +127,11 @@ Window policy is fixed per process and survives resets. Background mode requires
 Resize requests are asynchronous and can be clamped by Warcraft's minimum window size.
 
 `render=False` suppresses **Direct3D 9 Present** but completes GPU work through an event
-query. Draw calls and `GxPresent` cleanup remain active.
+query. The hook is installed through Direct3DCreate9/CreateDevice and the device vtable;
+Warcraft scene cleanup and draw calls remain active.
 Leaving GPU work pending retained buffers; skipping cleanup retained textures.
 A window and graphics device are still required. `debug("render", on=0)` uses the same
-hook. Other backends must keep `render=True`; requesting render-off exits
-with `render off requires the Direct3D 9 backend` in the hook log.
+hook. Other graphics backends are outside the validated configuration.
 
 ## Build and validation
 
@@ -160,14 +153,13 @@ python tools/check_wheel.py dist
 Host/native CI needs no game; the wheel check runs outside the checkout. Live tests cover
 commands, fog/events, results, resets, timing and pool isolation on supported stock maps.
 The fake checks contracts and lifecycle, not combat or native delivery. A complete seeded
-melee match repeats across reload and process replacement; a recorded two-agent movement
-fixture matches playback. The [compatibility matrix](compatibility.md) bounds this evidence.
+melee match repeats across reload and process replacement; fresh two-agent movement, construction and combat recordings match playback. The [compatibility matrix](compatibility.md) bounds this evidence.
 Run artifacts stay ignored; deliberate regression fixtures are tracked. Pending work belongs in the roadmap.
 
 Native tools: `tools/disasm.py`, `imports.py`, `natives.py`.
 Pipe probes: `where`, `profile`, `watch`, `scan`, `dump`, `trace`, `pktlog`.
 Native calls use 32-bit argument slots, float pointers for real arguments and bits for real
-returns. Staging may allocate VM handles (`0x077710`, `0x4e72c0`); object enumeration must not.
+returns. Staging may allocate VM handles (`0x1c3200`, `0x2651d0`); object enumeration must not.
 The bounds cache uses one temporary rectangle per episode and releases it immediately.
 MPQ extraction needs StormLib; see [tools](../tools/README.md).
 

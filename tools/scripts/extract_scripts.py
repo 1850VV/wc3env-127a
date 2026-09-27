@@ -1,4 +1,4 @@
-"""Extract common.j / Blizzard.j from the legacy MPQs shipped alongside WC3 1.29."""
+"""Extract common.j / Blizzard.j from the legacy MPQs shipped alongside the pinned WC3 1.27a."""
 
 import os
 import sys

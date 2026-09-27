@@ -12,7 +12,7 @@
  *                 turn packet delivery
  *   observe.c     the observation: accessors copied from the natives, fog, inventory, ground
  *                 items, destructables, the game result per player
- *   events.c      game events from a detour on the trigger-event dispatcher (0xbcd00)
+ *   events.c      game events from a detour on the trigger-event dispatcher (0x245080)
  *   act.c         orders through the player command queue
  *   players.c     startup AI suppression and offline command identities
  *   stage.c       staging natives behind the `debug` ops (spawn, kill, give, ...)
@@ -25,7 +25,7 @@
  * DLL -> host: one JSON reply per request; diagnostic output as `scan ...`, `dump ...`,
  * `watch ...`, `queued ...` lines, which the RPC client skips.
  *
- * Every RVA below is into the 1.29.2.9231 exe (image base randomised; add g_base). The file
+ * Every RVA below is into the pinned 1.27.0.52240 Game.dll (image base randomised; add g_base). The file
  * is pinned to that exact binary. tools/disasm.py, tools/imports.py and tools/natives.py read it. */
 #pragma once
 #define _CRT_SECURE_NO_WARNINGS
@@ -43,90 +43,165 @@
 #define MAX_SPEED 2048.0
 #define MAX_WAIT_FLOOR_MS 1000
 
+/* ---- 1.27.0.52240 shared object/probe bindings: Game.dll e04d1716... -------------------------------
+ * Shared by the formal adapter and the separately built reverse-engineering probe.
+ * Native entries recovered with tools/natives.py and ABI disassembled before use.
+ * GameUpdate fields recovered from its 25 ms loop (0x30ff00..0x31032a).
+ * See docs/port-127a.md for which bindings have live evidence. */
+#define P127_CREATE_UNIT 0x1deef0 /* cdecl(player, type, x*, y*, facing*) -> handle */
+#define P127_GET_UNIT_X 0x1e66b0  /* cdecl(handle) -> float bits in EAX */
+#define P127_GET_UNIT_Y 0x1e66f0
+#define P127_GET_UNIT_TYPE 0x1e6670  /* cdecl(handle) -> rawcode */
+#define P127_OBJECT_TYPE 0x30        /* GetUnitTypeId reads this field; 1.29 uses +0x34 */
+#define P127_GET_UNIT_STATE 0x1e6600 /* cdecl(handle, unitstate) -> float bits */
+#define P127_GET_PLAYER_ID 0x1e3d20  /* cdecl(player) -> 0..15 */
+#define P127_GAME_UPDATE 0x30ff00    /* thiscall(this, now_ms), ret 4 */
+#define P127_GAME_STATE 0x278        /* connection lifecycle; update simulates states 4/5 */
+#define P127_GAME_TURN_CREDIT 0x284  /* network milliseconds available */
+#define P127_GAME_CONNECTION 0x610   /* 0 live, 1 replay */
+#define P127_GAME_TIME 0x1c70        /* simulation ms, incremented by 5 in each subturn */
+#define P127_GAME_PREV_NOW 0x224c
+#define P127_GAME_PENDING 0x2250     /* pending ms, clamped to 4000, consumed in 25 ms turns */
+#define P127_GAME_PROVIDER 0x2288    /* checked by 0x30cd70: LOOP/NONE are offline */
+#define P127_RDTSC_HELPER 0x154d20   /* rdtsc; ret; neighbouring timer wrappers at 0x154d10/30 */
+#define P127_PACKET_DELIVER 0x30b8c0 /* fastcall(message*, context); event 0x18 at 0x30d68a */
+#define P127_TICK_WRAPPER 0x154d30   /* jmp [GetTickCount IAT], used for caller tracing */
+#define P127_HANDLE_UNIT 0x1d1550    /* fastcall(unit handle) -> object */
+#define P127_UNIT_ORDER 0x1e5f80     /* cdecl(unit handle) -> order id */
+#define P127_LOCAL_PLAYER 0x1e3150   /* cdecl() -> player handle */
+#define P127_STORE_VTABLE 0x95211c   /* CDataStore: 0x18-byte header, native allocator owns buffer */
+#define P127_STORE_CTOR 0x04df40     /* thiscall(store, &ptr, &base, &cap) */
+#define P127_STORE_DTOR 0x04de90
+#define P127_STORE_PUT_DATA 0x04e350  /* thiscall(store, bytes, count) */
+#define P127_SEND_LOOPBACK 0x30ba60   /* thiscall(game, type, store, flags), transfers buffer */
+#define P127_PLAYER_WIRE_ID 0x30c560  /* thiscall(player table, slot/tag) -> byte wire id */
+#define P127_PLAYER_TABLE 0x290       /* live connection's command identities */
+#define P127_LOCAL_WIRE_SLOT 0x2dc    /* slot/tag used by native outgoing-action flush at 0x311062 */
+#define P127_SAVE_REPLAY 0x3122c0     /* thiscall(game, path): close recorder, stamp duration, move file */
+#define P127_TURN_PRODUCER 0x874a10   /* thiscall(host): F7/0C time and F7/48 fragments */
+#define P127_TURN_TIME_WRITE 0x8670b0 /* fastcall(store, const WORD *), returns store */
+#define P127_TURN_TIME_RET 0x874be6   /* producer's time-word serializer return address */
+#define P127_HOST_TIME_COUNT 0x1a8    /* positive-time packet counter, reset for a new game */
+#define P127_ENUM_OBJECTS 0x02f230    /* fastcall(class, callback, context, 0); callback fastcall(object, context) */
+#define P127_UNIT_OWNER 0x668890      /* thiscall(unit) -> player object */
+#define P127_UNIT_STATE 0x669b40      /* thiscall(unit, output*, state) -> float* */
+#define P127_POS_UNPACK 0x03b720      /* ECX=packed vector, shared stack output from virtual +0xb8; ret 4 */
+#define P127_TLS_SLOT 0xbb8628        /* component TLS slot, read by 0x04efb0 */
+#define P127_FRAME_WAIT_RET 0x15894e  /* thiscall event wait after WaitForSingleObject */
+#define P127_FRAME_LOOP_WAIT_RET 0x05f7ed /* scheduler pacing, before component TLS installation */
+#define P127_REGISTER_PLAYER 0x306e60     /* thiscall(table, wire id, info*) -> waiting slot tag */
+#define P127_ASSIGN_PLAYER 0x312810       /* thiscall(table, waiting slot, game slot) */
+#define P127_START_MELEE_AI 0x1f8150      /* cdecl(player handle, script string handle) */
+#define P127_EVENT_REGISTERED 0x0566d0    /* thiscall(observer, event id) -> bool */
+#define P127_EVENT_DISPATCH 0x245080      /* thiscall(player, event id, event object) */
+#define P127_EVENT_UNIT_REF 0x2c          /* player-unit event's trigger-unit reference pair */
+#define P127_RESOLVE_REF 0x037350         /* fastcall(id, salt) -> agent node */
+#define P127_DAMAGE_TARGET                                                                                             \
+    0x1fab70 /* cdecl(unit, target, amount*, attack, ranged, attackType, damageType, weaponType) */
+#define P127_UNREGISTER_PLAYER 0x3078c0 /* thiscall(table, wire id) -> removed game slot; requires membership */
+#define P127_RESTART_GAME 0x1f31e0      /* cdecl(bool): schedule map reload */
+#define P127_RESOLVE_PAIR 0x044150      /* fastcall(&id/salt): live node +0x54 -> object */
+#define P127_ITEM_IN_SLOT 0x6678b0      /* thiscall(unit, slot): inventory +0x1f8 -> item object */
+#define P127_HANDLE_ITEM 0x1cfc50       /* fastcall(item handle) -> object */
+#define P127_UNIT_FLAGS 0x5c            /* IsUnitPaused/Loaded/Illusion and IsUnitType */
+#define P127_UNIT_HERO 0x1f0            /* GetHeroLevel -> 0x667a20 */
+#define P127_HERO_LEVEL 0x6c            /* protected integer, zero based */
+#define P127_PROTECTED_INT 0x039860     /* thiscall(protected integer) -> value */
+#define P127_UNIT_ORDER_REF 0x19c       /* GetUnitCurrentOrder -> live pair, then order +0x24 */
+#define P127_UNIT_ABILITIES 0x1dc       /* GetUnitAbilityLevel -> 0x46f440 */
+#define P127_ABILITY_FIND 0x46f440      /* thiscall(unit, id, inherit, alias, abilities, buffs) */
+#define P127_ABILITY_ID 0x34            /* alias read by 0x46f51c, class tag is virtual +0x1c */
+#define P127_ABILITY_LEVEL 0x50         /* zero based, GetUnitAbilityLevel adds one */
+#define P127_ITEM_CHARGES 0x84          /* GetItemCharges */
+#define P127_ITEM_OWNER_REF 0x8c        /* IsItemOwned resolves this pair */
+#define P127_N_PLAYER 0x1f1e70
+#define P127_N_IS_UNIT_TYPE 0x1e8cc0
+#define P127_N_HERO_LEVEL 0x1e2870
+#define P127_N_ABILITY_LEVEL 0x1e5ef0
+#define P127_N_ITEM_SLOT 0x1faf50
+#define P127_N_ITEM_CHARGES 0x1e2be0
+#define P127_N_ITEM_OWNED 0x1e7c30
+#define P127_N_CREATE_ITEM 0x1de200
+#define P127_N_ADD_ITEM 0x1fa610
+#define P127_N_REMOVE_ITEM 0x1fb170 /* UnitRemoveItem(unit, item), does not destroy item */
+#define P127_N_SET_ITEM_CHARGES 0x1f5b50
+#define P127_N_SET_HERO_LEVEL 0x1f57e0
+#define P127_N_ADD_ABILITY 0x1fa510
+#define P127_N_SET_ABILITY_LEVEL 0x1f7140
+#define P127_N_SET_UNIT_STATE 0x1f7a80
+#define P127_N_PAUSE_UNIT 0x1f1b20
+#define P127_N_SHOW_UNIT 0x1f7e70
+#define P127_ABILITY_MANA 0x3f7380      /* thiscall(ability, zero-based level) -> int, level row +0x10 */
+#define P127_ABILITY_COOLDOWN 0x3f6fd0  /* thiscall(ability, out*, zero-based level), row +0x14 */
+#define P127_EVENT_SPELL_EFFECT 0x80312 /* common.j player-unit event 274; builder 0x244300 */
+#define P127_EVENT_ITEM_DROP 0x80230    /* common.j 48 */
+#define P127_EVENT_ITEM_PICKUP 0x80231  /* common.j 49 */
+#define P127_EVENT_ARGUMENT 0x44        /* GetManipulatedItem and GetSpellAbilityId helpers */
+
 /* ---- RVA table ------------------------------------------------------------------------------ */
-#define RVA_BLOCK_ALLOC 0x040190      /* cdecl(lock group*, arena, flags, size) */
-#define RVA_ARENA_SEARCH_END 0x03f2d2 /* free-list search result before native growth */
-#define RVA_ARENA_COALESCE 0x03f640   /* cdecl(arena): merge adjacent free blocks */
-#define RVA_REALLOC_MOVE_RET 0x0403fa /* allocation fallback inside SMemReAlloc */
-#define RVA_ALLOCATOR_ARENAS 0xd30f40 /* heads of 256 native arena groups */
-#define RVA_GAME_UI_DESTROY 0x1e9660  /* CGameUI destructor */
-#define RVA_EVENT_UNREGISTER 0x4405d0 /* cdecl(event, callback, context, match_flags) */
-#define RVA_GAME_UI_EVENT12 0x1f0180
-#define RVA_GAME_UI_EVENT14 0x1f0200
-#define RVA_OBSERVER_COLLECT 0x43f700 /* thiscall(table, &ring): detach buckets */
-#define RVA_OBSERVER_REHASH 0x43f220  /* thiscall(table, &ring): prune empty nodes, restore live ones */
-#define RVA_RDTSC_HELPER 0x396c80     /* rdtsc; ret, calibrated against QPC at 0x396bd0 */
-#define RVA_GAMEUPDATE 0x1aefd0       /* GameUpdate(this, now_ms) thiscall, once per frame */
-#define FRAME_LOOP_LO 0x445630        /* the frame loop, for `profile` */
-#define FRAME_LOOP_HI 0x445a30
-#define RVA_GXPRESENT 0x3d1070       /* end of the frame function 0x559330 */
-#define RVA_GX_DEVICE 0xd4ab54       /* graphics backend singleton */
-#define RVA_GX_D3D9_VTABLE 0xaba2e0  /* Direct3D 9 backend */
-#define GX_D3D9_DEVICE 0x59c         /* IDirect3DDevice9* inside that backend */
-#define RVA_PKT_DELIVER 0x1aa930     /* Storm event handler (id 0x18): time-slot packet -> list game+0x1308 */
-#define RVA_TURN_PRODUCER 0x557be0   /* offline host: build and send a time slot */
-#define RVA_TURN_TIME_WRITE 0x54c960 /* serialize a u16 by reference */
-#define RVA_TURN_TIME_RET 0x557db2   /* only this producer call supplies turn time */
-#define RVA_SAVE_REPLAY 0x1b1490     /* game->SaveReplay(path): close the recorder, move TempReplay.w3g */
-#define RVA_TLS_SLOT 0xd3b518        /* the per-thread component table's TLS slot index */
-#define RVA_FRAME_WAIT_RET 0x3c2ede  /* return address of the frame loop's pacing wait (clock.c) */
-#define RVA_FRAME_LOOP_WAIT_RET 0x44574f /* where the frame loop's call of that wait wrapper returns; other
-                                           * callers (0x575dcb) block inside game code */
+#define RVA_RDTSC_HELPER 0x154d20 /* rdtsc; ret, calibrated against QPC at 0x396bd0 */
+#define RVA_GAMEUPDATE 0x30ff00   /* GameUpdate(this, now_ms) thiscall, once per frame */
+#define FRAME_LOOP_LO 0x05f710    /* the frame scheduler, for `profile` */
+#define FRAME_LOOP_HI 0x05f944
+#define RVA_PKT_DELIVER 0x30b8c0     /* Storm event handler (id 0x18): time-slot packet -> list game+0x1308 */
+#define RVA_TURN_PRODUCER 0x874a10   /* offline host: build and send a time slot */
+#define RVA_TURN_TIME_WRITE 0x8670b0 /* serialize a u16 by reference */
+#define RVA_TURN_TIME_RET 0x874be6   /* only this producer call supplies turn time */
+#define RVA_SAVE_REPLAY 0x3122c0     /* game->SaveReplay(path): close the recorder, move TempReplay.w3g */
+#define RVA_TLS_SLOT 0xbb8628        /* the per-thread component table's TLS slot index */
+#define RVA_FRAME_WAIT_RET 0x15894e  /* return address of the frame loop's pacing wait (clock.c) */
+#define RVA_FRAME_LOOP_WAIT_RET                                                                                        \
+    0x05f7ed /* where the frame loop's call of that wait wrapper returns; other                                        \
+              * callers (0x575dcb) block inside game code */
 /* game object (GameUpdate's this) */
-#define GAME_TIME_MS 0x2038      /* game time */
-#define GAME_PREV_NOW 0x2614     /* previous now_ms */
-#define GAME_PENDING_MS 0x2618   /* pending game ms */
-#define GAME_TURN_CREDIT 0x3c4   /* turn ms available */
-#define GAME_OUT_STORE 0x2040    /* the outgoing action store */
-#define GAME_CONNECTION 0x898    /* active connection: 0 live game, 1 replay */
-#define GAME_REPLAY_LENGTH 0xe80 /* recorded duration from the native replay header */
+#define GAME_TIME_MS 0x1c70      /* game time */
+#define GAME_PREV_NOW 0x224c     /* previous now_ms */
+#define GAME_PENDING_MS 0x2250   /* pending game ms */
+#define GAME_TURN_CREDIT 0x284   /* turn ms available */
+#define GAME_OUT_STORE 0x1c78    /* the outgoing action store */
+#define GAME_CONNECTION 0x610    /* active connection: 0 live game, 1 replay */
+#define GAME_REPLAY_LENGTH 0xac0 /* recorded duration from the native replay header */
 /* natives (tools/natives.py) and the internals they call */
-#define RVA_N_PLAYER 0x0a4240    /* (I)Hplayer; */
-#define RVA_N_LOCAL_PLAYER 0x093790 /* GetLocalPlayer: ()Hplayer; */
-#define RVA_N_PLAYERID 0x0945f0  /* GetPlayerId (Hplayer;)I */
-#define RVA_N_UNITORDER 0x0973a0 /* GetUnitCurrentOrder (Hunit;)I */
-/* Live ability readback; this build's mana/cooldown natives take ONE-based levels (disassembled). */
-#define RVA_N_UNITABILITYLEVEL 0x0971c0    /* GetUnitAbilityLevel (Hunit;I)I */
-#define RVA_N_ABILITYMANACOST 0x097220     /* BlzGetUnitAbilityManaCost (Hunit;II)I */
-#define RVA_N_ABILITYCOOLDOWN 0x097150     /* BlzGetUnitAbilityCooldown (Hunit;II)R */
-#define RVA_N_ABILITYCOOLDOWNLEFT 0x097190 /* BlzGetUnitAbilityCooldownRemaining (Hunit;I)R */
-#define RVA_N_STARTMELEEAI 0x0ac230        /* StartMeleeAI (Hplayer;S)V */
-#define RVA_N_STARTCAMPAIGNAI 0x0ac200     /* StartCampaignAI (Hplayer;S)V */
-#define RVA_N_GETPLAYERSTATE 0x094a80      /* (Hplayer;Hplayerstate;)I */
-#define RVA_N_PLAYERRACE 0x0946e0          /* GetPlayerRace (Hplayer;)Hrace; */
-#define RVA_N_PLAYERCONTROL 0x094560       /* GetPlayerController (Hplayer;)Hmapcontrol; */
-#define RVA_N_PAUSECOMPAI 0x0a3e60         /* PauseCompAI (Hplayer;B)V */
-#define RVA_N_PLAYERSLOTSTATE 0x094980     /* GetPlayerSlotState (Hplayer;)Hplayerslotstate; */
-#define RVA_N_ISVISIBLE 0x09a4a0           /* IsVisibleToPlayer (RRHplayer;)B; read-only point fog query */
-#define RVA_N_REMOVEPLAYER 0x0a51c0        /* (Hplayer;Hplayergameresult;)V: what melee victory and defeat call */
-#define RVA_HANDLE_OBJECT 0x083940         /* cdecl(Hunit) -> unit object: the lookup every unit native starts with */
-#define RVA_PLAYER_OBJECT 0x082770         /* cdecl(Hplayer) -> player object */
-#define RVA_ENUM_OBJECTS 0x3f4ba0          /* (class, cb, ctx, 0): for every live object of a registry class */
-#define RVA_UNIT_OWNER 0x292340
-#define RVA_UNIT_STATE 0x2935c0
-#define RVA_POS_UNPACK 0x3fcc50
-#define RVA_ITEM_IN_SLOT 0x291820
-#define RVA_PROTECTED_INT 0x3fb2b0
-#define RVA_RESOLVE_REF 0x0707f0
-#define RVA_RESOLVE_PAIR 0x3fc7e0 /* (ecx = &ref pair) -> object or 0: items' owners, abilities */
-#define RVA_VM_GLOBAL 0xd3b6f4    /* the JASS VM, set whenever a map is loaded */
-#define RVA_VM_STR_CTX 0x069010   /* JassStringToC / the VM string context, for the script version */
-#define RVA_SCRIPT_VERSION 0x304330
-#define RVA_STORE_VTABLE 0xa78c2c /* CDataStore */
-#define RVA_STORE_CTOR 0x0d7140
-#define RVA_STORE_DTOR 0x0d7040
-#define RVA_PUTBYTE 0x05ce80
-#define RVA_PUTDATA 0x05d230
-#define RVA_QUEUE_ACTION 0x1ae190      /* QueueLocalAction(store, player) */
-#define RVA_SEND_LOOPBACK 0x1aab40     /* game->SendPacket(type, store, flags) */
-#define RVA_REGISTER_PLAYER 0x1a5820   /* table->Register(wire id, name/info) -> 0x80 | (wire id - 1) */
-#define RVA_ASSIGN_PLAYER 0x1b1990     /* table->Assign(waiting slot, game slot) */
-#define RVA_UNREGISTER_PLAYER 0x1a5e70 /* table->Unregister(wire id) */
-#define RVA_N_RESTARTGAME 0x0a5620
+#define RVA_N_PLAYER 0x1f1e70       /* (I)Hplayer; */
+#define RVA_N_LOCAL_PLAYER 0x1e3150 /* GetLocalPlayer: ()Hplayer; */
+#define RVA_N_PLAYERID 0x1e3d20     /* GetPlayerId (Hplayer;)I */
+#define RVA_N_UNITORDER 0x1e5f80    /* GetUnitCurrentOrder (Hunit;)I */
+/* Ability levels use the native; mana/cooldown readback uses objects127 helpers. */
+#define RVA_N_UNITABILITYLEVEL 0x1e5ef0 /* GetUnitAbilityLevel (Hunit;I)I */
+#define RVA_N_STARTMELEEAI 0x1f8150     /* StartMeleeAI (Hplayer;S)V */
+#define RVA_N_STARTCAMPAIGNAI 0x1f8100  /* StartCampaignAI (Hplayer;S)V */
+#define RVA_N_GETPLAYERSTATE 0x1e4080   /* (Hplayer;Hplayerstate;)I */
+#define RVA_N_PLAYERRACE 0x1e3d70       /* GetPlayerRace (Hplayer;)Hrace; */
+#define RVA_N_PLAYERCONTROL 0x1e3cc0    /* GetPlayerController (Hplayer;)Hmapcontrol; */
+#define RVA_N_PAUSECOMPAI 0x1f1ab0      /* PauseCompAI (Hplayer;B)V */
+#define RVA_N_PLAYERSLOTSTATE 0x1e3fe0  /* GetPlayerSlotState (Hplayer;)Hplayerslotstate; */
+#define RVA_N_ISVISIBLE 0x1e8f50        /* IsVisibleToPlayer (RRHplayer;)B; read-only point fog query */
+#define RVA_N_REMOVEPLAYER 0x1f2db0     /* (Hplayer;Hplayergameresult;)V: what melee victory and defeat call */
+#define RVA_HANDLE_OBJECT 0x1d1550      /* cdecl(Hunit) -> unit object: the lookup every unit native starts with */
+#define RVA_PLAYER_OBJECT 0x1d03d0      /* cdecl(Hplayer) -> player object */
+#define RVA_ENUM_OBJECTS 0x02f230       /* (class, cb, ctx, 0): for every live object of a registry class */
+#define RVA_UNIT_OWNER 0x668890
+#define RVA_UNIT_STATE 0x669b40
+#define RVA_POS_UNPACK 0x03b720
+#define RVA_ITEM_IN_SLOT 0x6678b0
+#define RVA_PROTECTED_INT 0x039860
+#define RVA_RESOLVE_REF 0x037350
+#define RVA_RESOLVE_PAIR 0x044150 /* (ecx = &ref pair) -> object or 0: items' owners, abilities */
+#define RVA_VM_GLOBAL 0xbe4238    /* the JASS VM, set whenever a map is loaded */
+#define RVA_STORE_VTABLE 0x95211c /* CDataStore */
+#define RVA_STORE_CTOR 0x04df40
+#define RVA_STORE_DTOR 0x04de90
+#define RVA_PUTBYTE 0x04df50 /* thiscall(store, byte), ret 4 */
+#define RVA_PUTDATA 0x04e350
+#define RVA_QUEUE_ACTION 0x30f1b0      /* fastcall(store, connection): append local UI records */
+#define RVA_SEND_LOOPBACK 0x30ba60     /* game->SendPacket(type, store, flags) */
+#define RVA_REGISTER_PLAYER 0x306e60   /* table->Register(wire id, name/info) -> 0x80 | (wire id - 1) */
+#define RVA_ASSIGN_PLAYER 0x312810     /* table->Assign(waiting slot, game slot) */
+#define RVA_UNREGISTER_PLAYER 0x3078c0 /* table->Unregister(wire id) */
+#define RVA_N_RESTARTGAME 0x1f31e0
 #define UNIT_CLASS 0x2b773375         /* '+w3u' */
 #define DESTRUCTABLE_CLASS 0x2b773364 /* '+w3d' */
 #define ITEM_CLASS 0x6974656d         /* 'item': what CreateItem's allocator (0x2c4d40) registers under */
-#define ITEM_LIFE 0x160               /* GetWidgetLife's item getter (0x2c2e20) reads current life here */
 /* second instance guard: CreateEventA("Warcraft III Game Application") 0x2e9ff -> 0x397c80.
  * game logger 0x3b8f0: hooking it stalls the simulation, do not. */
 
@@ -171,6 +246,12 @@ DWORD real_wait(HANDLE event, DWORD ms);
 void clock_set_speed(double s);
 void clock_freeze(int on);
 void clock_init_hooks(void);
+typedef struct {
+    DWORD rdtsc_helper;
+    DWORD frame_wait_ret;
+    DWORD frame_loop_wait_ret;
+} ClockBindings;
+void clock_init_hooks_for(const ClockBindings *bindings);
 
 /* ---- step.c ----------------------------------------------------------------------------------- */
 DWORD game_time(void);
@@ -185,13 +266,13 @@ void step_init_hooks(void);
 extern volatile LONG g_frames_seen;
 
 /* ---- observe.c -------------------------------------------------------------------------------- */
-typedef void(__cdecl *EnumObjectsFn)(int cls, void *cb, void *ctx, int zero);
-typedef BYTE *(__cdecl *ResolveRefFn)(DWORD id, DWORD salt); /* RVA_RESOLVE_REF */
+typedef void(__fastcall *EnumObjectsFn)(int cls, void *cb, void *ctx, int zero);
+typedef BYTE *(__fastcall *ResolveRefFn)(DWORD id, DWORD salt); /* RVA_RESOLVE_REF */
 typedef int(__cdecl *NativeI_V)(void);
 typedef int(__cdecl *NativeI_I)(int);
 typedef int(__cdecl *NativeI_II)(int, int);
 #define NATIVE(rva, T) ((T)(g_base + (rva)))
-extern BYTE *g_fn_owner, *g_fn_state, *g_fn_unpack, *g_vm_global, *g_fn_ctx, *g_fn_ver, *g_fn_slot, *g_fn_resolve_pair;
+extern BYTE *g_fn_owner, *g_fn_state, *g_fn_unpack, *g_vm_global, *g_fn_slot, *g_fn_resolve_pair;
 void accessors_init(void);
 int __cdecl unit_xy_bits(BYTE *u, int idx);
 int __cdecl unit_state_bits(BYTE *u, int state);
@@ -200,7 +281,6 @@ int __cdecl player_jass_id(BYTE *pl);
 int __cdecl unit_visible(BYTE *u, int player_slot);
 BYTE *__cdecl unit_item_in_slot(BYTE *u, int slot);
 int __cdecl item_owned(BYTE *it);
-int __cdecl script_version(void);
 int player_slot(int jass_id);
 int object_visible(BYTE *object, int cls, int player);
 float bits_to_f(int i);
@@ -262,7 +342,6 @@ int handle_of(BYTE *obj); /* game thread: the object's JASS handle, allocated if
 void instance_init_hooks(void);
 
 /* ---- allocator.c ------------------------------------------------------------------------------ */
-void allocator_init_hooks(void);
 
 /* ---- diag.c ----------------------------------------------------------------------------------- */
 void mem_scan(const char *hex);
@@ -307,16 +386,16 @@ enum { RJ_OK, RJ_NOT_YOURS, RJ_UNKNOWN_UNIT, RJ_UNKNOWN_COMMAND, RJ_BAD_ARGS, RJ
 void act_apply(ActJob *job); /* act.c: validate, encode and queue a batch; game thread */
 
 /* Building search beneath the stock AI's 0x6d4970 wrapper; verified on 1.29.2. */
-#define RVA_PLACEMENT_INIT 0x6d3de0     /* thiscall(scratch; slot, anchor x*, y*, type, density, worker) */
-#define RVA_PLACEMENT_COPY 0x6d3c00     /* thiscall(destination; source scratch) */
-#define RVA_PLACEMENT_SEARCH 0x6d41f0   /* thiscall(scratch; score*, site[3], primary bool) */
-#define RVA_PLACEMENT_ENUM 0x28ea00     /* cdecl(callback, scratch, flags, radius, x, y, 2, 31) */
-#define RVA_PLACEMENT_OBSTACLE 0x6d4c10 /* engine footprint callback for the search */
-#define RVA_PLACEMENT_RADIUS 0xdb4b78   /* engine search radius, float bits */
-#define RVA_PLACEMENT_NO_SITE 0xd2d804  /* engine failure score */
-#define RVA_PLAYER_TYPE_COUNT 0x0bd4a0  /* thiscall(player; type, counter kind) */
-#define RVA_UNIT_PENDING_TYPE 0x294700  /* thiscall(unit; type): pending production */
-#define RVA_TYPE_IS_BUILDING 0x1cc9f0   /* cdecl(type) -> building predicate */
+#define RVA_PLACEMENT_INIT 0x88bbd0     /* thiscall(scratch; slot, anchor x*, y*, type, density, worker) */
+#define RVA_PLACEMENT_COPY 0x88ba10     /* thiscall(destination; source scratch) */
+#define RVA_PLACEMENT_SEARCH 0x88d020   /* thiscall(scratch; score*, site[3], primary bool) */
+#define RVA_PLACEMENT_ENUM 0x661060     /* cdecl(callback, scratch, flags, radius, x, y, 2, 31) */
+#define RVA_PLACEMENT_OBSTACLE 0x891b70 /* engine footprint callback for the search */
+#define RVA_PLACEMENT_RADIUS 0xbf181c   /* engine search radius, float bits */
+#define RVA_PLACEMENT_NO_SITE 0xbb81d0  /* engine failure score */
+#define RVA_PLAYER_TYPE_COUNT 0x2486d0  /* thiscall(player; type, counter kind) */
+#define RVA_UNIT_PENDING_TYPE 0x66b1c0  /* thiscall(unit; type): pending production */
+#define RVA_TYPE_IS_BUILDING 0x32df80   /* cdecl(type) -> building predicate */
 #define PLACEMENT_SEARCH_SIZE 0x1947c   /* native scratch structure size from 0x6d4970 */
 /* A structure already ordered but not yet standing: another search must not choose its ground. */
 typedef struct {
@@ -327,5 +406,60 @@ typedef struct {
 /* `ignore`: the worker whose own pending site this order replaces (NULL when the order is queued). */
 int placement_find(BYTE *worker, unsigned type, float *x, float *y, const PendingSite *pending, int n_pending,
                    const BYTE *ignore);
-int placement_pending(int player, PendingSite *out, int max); /* the player's workers' current build orders */
+int placement_pending(int player, PendingSite *out, int max);    /* the player's workers' current build orders */
 int unit_order_point(BYTE *u, unsigned *id, float *x, float *y); /* observe.c: the current order's id and point */
+
+/* Additional native entries and verified internal helpers. */
+#define RVA_N_DROP_ITEM_TARGET 0x1facf0 /* UnitDropItemTarget (Hunit;Hitem;Hwidget;)B */
+#define RVA_N_DROP_ITEM_POINT 0x1fac20  /* UnitDropItemPoint (Hunit;Hitem;RR)B */
+#define RVA_FIRE_EVENT 0x245080
+#define RVA_FIRE_SPELL_EFFECT 0x244300
+#define RVA_EVENT_REGISTERED 0x0566d0 /* thiscall(this, eventid): [this+8] -> 0x43f100(mgr; id, 0), a pure query */
+#define N_PLAYER_TEAM 0x1e4160
+#define N_PLAYER_ALLIANCE 0x1e3c50
+#define N_PLAYER_ALLY 0x1e8040
+#define N_PLAYER_ENEMY 0x1e8090
+#define N_PLAYER_SCORE 0x1e3d90
+#define N_WORLD_BOUNDS 0x1e6810
+#define N_RECT_MIN_X 0x1e45d0
+#define N_RECT_MIN_Y 0x1e45f0
+#define N_RECT_MAX_X 0x1e4590
+#define N_RECT_MAX_Y 0x1e45b0
+#define N_REMOVE_RECT 0x1f2dd0
+#define RVA_VM_CONTEXT 0x1c3200 /* thiscall(this = *g_vm_global) -> the handle context */
+#define RVA_HANDLE_FOR 0x2651d0 /* thiscall(ctx; obj, 0) -> handle, allocated if new */
+#define RVA_ITEM_OBJECT                                                                                                \
+    0x1cfc50 /* cdecl(Hitem) -> item object (the lookup is per class: units 0x1d1550, players 0x1d03d0) */
+#define RVA_N_CREATEUNIT 0x1deef0                  /* (Hplayer;IRRR)Hunit; */
+#define RVA_N_CREATEITEM 0x1de200                  /* (IRR)Hitem; */
+#define RVA_N_KILLUNIT 0x1efcd0                    /* (Hunit;)V */
+#define RVA_N_REMOVEUNIT 0x1f2f80                  /* (Hunit;)V */
+#define RVA_N_SETHEROLEVEL 0x1f57e0                /* (Hunit;IB)V */
+#define RVA_N_SETTECHRESEARCHED 0x1f6440           /* SetPlayerTechResearched (Hplayer;II)V */
+#define RVA_N_ADDITEMBYID 0x1fa700                 /* UnitAddItemById (Hunit;I)Hitem; */
+#define RVA_N_SETUNITSTATE 0x1f7a80                /* (Hunit;Hunitstate;R)V */
+#define RVA_N_SETPLAYERSTATE 0x1f6320              /* (Hplayer;Hplayerstate;I)V */
+#define RVA_N_INVULNERABLE 0x1f7690                /* SetUnitInvulnerable (Hunit;B)V */
+#define RVA_AI_CONTEXT 0xbf1854                    /* Current AI script context */
+#define RVA_N_MELEEDIFFICULTY 0x891e70             /* ()I */
+#define RVA_N_GETAIDIFFICULTY 0x1e1500             /* (Hplayer;)Haidifficulty; */
+#define RVA_DESTRUCTABLE_TARGET_MASK 0x6a44d0      /* thiscall(destructable) -> target category mask */
+#define RVA_N_CLEARTEXTMESSAGES 0x1db520           /* ()V */
+#define RVA_N_DISPLAYTIMEDTEXTTOPLAYER 0x1dfe70    /* (Hplayer;RRRS)V */
+#define RVA_N_SETRANDOMSEED 0x1f64b0               /* (I)V */
+#define RVA_PLAYER_REFRESH_CONTROL 0x24d8a0        /* thiscall(player): refresh controller dependency flags */
+#define RVA_N_GETPLAYERSTARTLOCATION 0x1e4000      /* (Hplayer;)I */
+#define RVA_N_SETPLAYERS 0x1f64a0                  /* (I)V */
+#define RVA_N_SETPLAYERRACEPREFERENCE 0x1f62a0     /* (Hplayer;Hracepreference;)V */
+#define RVA_N_SETPLAYERCONTROLLER 0x1f60f0         /* (Hplayer;Hmapcontrol;)V */
+#define RVA_N_DEFINESTARTLOCATION 0x1df300         /* (IRR)V */
+#define RVA_N_SETPLAYERSTARTLOCATION 0x1f6300      /* (Hplayer;I)V */
+#define RVA_N_FORCEPLAYERSTARTLOCATION 0x1e0df0    /* (Hplayer;I)V */
+#define RVA_RESOLVE_RACES 0x1cc390                 /* thiscall(player collection): lobby preferences resolve */
+#define RVA_ASSIGN_STARTS 0x1cc590                 /* thiscall(lobby): assign starting locations */
+#define RVA_WIDGET_ADJUST_MAX_LIFE 0x633000        /* thiscall(widget, delta*, mode): shared max-life adjustment */
+#define RVA_N_CREATEDESTRUCTABLE 0x1ddc50          /* (IRRRRI)Hdestructable; */
+#define RVA_HANDLE_DESTRUCTABLE 0x1cefd0           /* fastcall(handle) -> destructable object */
+#define RVA_N_SETDESTRUCTABLEINVULNERABLE 0x1f4b00 /* (Hdestructable;B)V */
+#define RVA_N_SETPLAYERALLIANCE 0x1f6030           /* (Hplayer;Hplayer;Halliancetype;B)V */
+#define RVA_N_SETCAMERAPOSITION 0x1f4200           /* (RR)V */

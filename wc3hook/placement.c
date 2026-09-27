@@ -1,5 +1,5 @@
 /* Warcraft's native placement search, without an AI player or AI script.
- * Call orchestration follows 1.29.2's 0x6d4970. The engine constructs the local
+ * Call orchestration follows 1.27a's 0x88f2f0. The engine constructs the local
  * pathing search, scores sites, checks the worker, and supplies the footprint.
  * Only scratch memory lives here; nothing changes player/controller state. */
 #include "wc3hook.h"
@@ -18,19 +18,19 @@ typedef struct {
     int count;
 } PendingCount;
 
-/* Same pending-production count as 0x6c0ad0, enumerated without the AI object's unit list. */
-static int __cdecl count_pending(BYTE *u, void *ctx) {
+/* Same pending-production count as 0x89e070, enumerated without the AI object's unit list. */
+static int __fastcall count_pending(BYTE *u, void *ctx) {
     PendingCount *c = ctx;
-    if (unit_owner(u) == c->player && !(*(DWORD *)(u + 0x20) & 1) && *(void **)(u + 0x400) &&
-        *(DWORD *)(u + 0x3a0) == 2 && NATIVE(RVA_UNIT_PENDING_TYPE, PendingFn)(u, NULL, c->type))
+    if (unit_owner(u) == c->player && !(*(DWORD *)(u + 0x20) & 1) && *(void **)(u + 0x1f4) &&
+        *(DWORD *)(u + 0x194) == 2 && NATIVE(RVA_UNIT_PENDING_TYPE, PendingFn)(u, NULL, c->type))
         c->count++;
     return 1;
 }
 
 static int search_once(BYTE *worker, unsigned type, float *x, float *y) {
     /* The AI caller checks these engine predicates before entering the search too. */
-    BYTE *ability = *(BYTE **)(worker + 0x400);
-    if (!ability || !NATIVE(RVA_TYPE_IS_BUILDING, NativeI_I)((int)type))
+    BYTE *ability = *(BYTE **)(worker + 0x1f4);
+    if (!ability || !NATIVE(RVA_TYPE_IS_BUILDING, int(__fastcall *)(int))((int)type))
         return 0;
     PendingFn can_build = (PendingFn)(*(DWORD **)(ability))[0x270 / 4];
     if (!can_build(ability, NULL, type))
@@ -81,7 +81,7 @@ static int overlaps(unsigned type, float x, float y, const PendingSite *p) {
  * free. Search again from anchors stepped outward until the chosen site clears every pending one. */
 int placement_find(BYTE *worker, unsigned type, float *x, float *y, const PendingSite *pending, int n_pending,
                    const BYTE *ignore) {
-    static const float DIRS[8][2] = {{1, 0}, {0.7071f, 0.7071f}, {0, 1}, {-0.7071f, 0.7071f},
+    static const float DIRS[8][2] = {{1, 0},  {0.7071f, 0.7071f},   {0, 1},  {-0.7071f, 0.7071f},
                                      {-1, 0}, {-0.7071f, -0.7071f}, {0, -1}, {0.7071f, -0.7071f}};
     const Footprint *f = footprint(type);
     float step = f ? (float)max(f->w, f->h) : 128.0f;
@@ -114,13 +114,14 @@ typedef struct {
     int n, max;
 } PendingScan;
 
-static int __cdecl scan_pending(BYTE *u, void *ctx) {
+static int __fastcall scan_pending(BYTE *u, void *ctx) {
     PendingScan *s = ctx;
     unsigned id;
     float px, py;
     BYTE *owner = unit_owner(u);
     if (s->n < s->max && owner && player_jass_id(owner) == s->player && !(*(DWORD *)(u + 0x20) & 1) &&
-        unit_order_point(u, &id, &px, &py) && (id >> 24) && NATIVE(RVA_TYPE_IS_BUILDING, NativeI_I)((int)id))
+        unit_order_point(u, &id, &px, &py) && (id >> 24) &&
+        NATIVE(RVA_TYPE_IS_BUILDING, int(__fastcall *)(int))((int)id))
         s->out[s->n++] = (PendingSite){id, px, py, u};
     return 1;
 }

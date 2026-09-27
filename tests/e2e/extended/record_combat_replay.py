@@ -102,7 +102,7 @@ class Commander:
         return orders
 
 
-def record() -> tuple[str, int, dict]:
+def record(destination: Path = FIXTURE) -> tuple[str, int, dict]:
     commanders = {p: Commander() for p in PLAYERS}
     config = GameConfig(players=tuple(PlayerConfig(p) for p in PLAYERS), render=False)
     with GameSession(config) as session:
@@ -117,8 +117,8 @@ def record() -> tuple[str, int, dict]:
             fought = all({"spell_effect", "death"} <= c.kinds or done for c in commanders.values())
             if done or fought:
                 break
-        FIXTURE.unlink(missing_ok=True)
-        session.game.rpc.save_replay(str(FIXTURE))
+        destination.unlink(missing_ok=True)
+        session.game.rpc.save_replay(str(destination))
     return digest(trace), len(trace) - 1, {p: sorted(c.kinds) for p, c in commanders.items()}
 
 

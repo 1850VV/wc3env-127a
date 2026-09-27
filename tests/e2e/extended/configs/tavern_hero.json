@@ -40,7 +40,20 @@
       "x": 4600.0,
       "y": 2600.0,
       "n": 1
+    },
+    {
+      "op": "spawn",
+      "type_id": "hpea",
+      "player": 0,
+      "x": 4400.0,
+      "y": 2500.0,
+      "n": 1
+    },
+    {
+      "op": "invulnerable",
+      "player": 0,
+      "on": 1
     }
   ],
-  "notes": "A Peasant recruits a first hero (a Pandaren Brewmaster) from a neutral Tavern once it is in stock; the first hero is free."
+  "notes": "A nearby Peasant recruits a first hero from a neutral Tavern once it is in stock; the first hero token avoids its gold cost. The staged buyer is protected from nearby creeps while waiting for tavern stock."
 }

@@ -1,15 +1,15 @@
 """Replay recorded RPC movement for both players, then handle EOF without a result.
 
-The 1.3 KiB fixture contains native replay data, no map assets. It was recorded on
-the pinned build's stock Echo Isles, with two agents and no setup/debug mutations.
-The reference digest covers both players at every second from 1 through 51.
+Record native orders on the pinned installation, then independently replay them.
+The live trace covers both players at every second from 1 through 51; neither
+setup mutations nor a digest from another game version can satisfy this test.
 """
 
-import hashlib
-import json
+import tempfile
 import unittest
 from pathlib import Path
 
+from wc3env import Action
 from wc3env.game import launch
 from wc3env.rpc import RpcError
 from wc3env.session import GameConfig, GameSession, PlayerConfig
@@ -18,8 +18,36 @@ from .support import state
 
 
 class ReplayTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        temporary = tempfile.TemporaryDirectory(prefix="wc3-replay-")
+        cls.addClassCleanup(temporary.cleanup)
+        cls.replay = Path(temporary.name) / "self_play.w3g"
+        config = GameConfig(players=(PlayerConfig(0), PlayerConfig(1)), render=False, sound=False)
+        with GameSession(config) as session:
+            views = session.reset()
+            session.debug("speed", factor=64)
+            session.debug("waitfloor", ms=1)
+            cls.trace = [state(views)]
+            for tick in range(50):
+                batches = {0: [], 1: []}
+                if tick in (0, 10, 20, 30):
+                    for player, obs in views.items():
+                        unit = next(u for u in obs["units"] if not u["structure"])
+                        batches[player] = [
+                            Action(
+                                unit["unit_id"],
+                                "move",
+                                dict(x=unit["x"] + (200 if tick % 20 == 0 else -200), y=unit["y"] - 100),
+                            )
+                        ]
+                views, done, info = session.step(batches)
+                assert not done and not any(info["rejected"].values()), info
+                cls.trace.append(state(views))
+            session.save_replay(cls.replay)
+
     def test_recorded_two_player_actions_and_eof(self):
-        replay = Path(__file__).resolve().parents[1] / "fixtures" / "self_play.w3g"
+        replay = self.replay
         game = launch(map=replay, agents=(0, 1), render=False)
         self.addCleanup(game.close)
         rpc = game.rpc
@@ -37,8 +65,7 @@ class ReplayTest(unittest.TestCase):
             self.assertEqual(result["elapsed_ms"], 1000)
             self.assertEqual(result["reason"], "replay_end" if tick == 49 else "target")
             trace.append(state({p: rpc.observe(p) for p in (0, 1)}))
-        digest = hashlib.sha256(json.dumps(trace, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-        self.assertEqual(digest, "362f4b20a9254551b9d0b29ed9bfdcfcebf7c3470381147294538e1d9ac09649")
+        self.assertEqual(trace, self.trace)
         self.assertEqual(rpc.status, "ended")
         with self.assertRaises(RpcError):
             rpc.step(1000)
@@ -47,7 +74,7 @@ class ReplayTest(unittest.TestCase):
         self.assertEqual(state({p: rpc.observe(p) for p in (0, 1)}), trace[-1])
 
     def test_session_step_stops_at_replay_end_without_inventing_results(self):
-        replay = Path(__file__).resolve().parents[1] / "fixtures" / "self_play.w3g"
+        replay = self.replay
         with GameSession(
             GameConfig(
                 map=str(replay),

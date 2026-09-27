@@ -3,23 +3,44 @@
     python tools/natives.py                 # every native
     python tools/natives.py GetPlayerState Player   # just these
 
-Registration sites push the prototype string, the name string and the function address
-before calling the binder, so for each name string in .rdata we find the `push <name va>`
-and read the neighbouring pushes. Checked against Preload (0x0a4410) and S2I (0x0a5840).
+The 1.29 registration binder receives three stack arguments; 1.27a's Game.dll uses
+ECX/EDX for implementation/name and pushes the prototype. Registration ABI is separate
+from each native's calling convention. --registrations retains all duplicate/stub sites.
 """
 
 from __future__ import annotations
 
+import argparse
+import json
 import re
 import struct
 import sys
+from collections import Counter
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-sys.path.insert(0, str(Path(__file__).parent))
-from disasm import EXE, Image  # noqa: E402
+if TYPE_CHECKING:
+    from tools.disasm import Image
 
 
-def natives(img: Image) -> dict[str, tuple[str, int]]:
+@dataclass(frozen=True)
+class Registration:
+    name: str
+    prototype: str
+    implementation: int
+    site: int
+    binder: int
+    convention: str
+
+
+def registrations(img: Image) -> list[Registration]:
+    """Decode both known registration sequences, retaining duplicate/stub entries.
+
+    These are static candidates, not proof of runtime calling conventions or compatibility.
+    1.27a passes the implementation in ECX and name in EDX; only the prototype is pushed.
+    The 1.29 build pushes all three. Both end in a direct call to the binder.
+    """
     d = img.d
     base = img.image_base
 
@@ -32,44 +53,89 @@ def natives(img: Image) -> dict[str, tuple[str, int]]:
 
     def off_of(rva: int) -> int | None:
         for _, va, vsize, rptr, rsize in img.sections:
-            if va <= rva < va + max(vsize, rsize):
+            if va <= rva < va + rsize:
                 return rptr + (rva - va)
         return None
 
-    # every `push imm32` whose target is a string, indexed by target
-    pushes: dict[int, list[int]] = {}
-    for m in re.finditer(rb"\x68(....)", d, re.S):
-        (va,) = struct.unpack("<I", m.group(1))
-        pushes.setdefault(va, []).append(m.start())
+    def cstring(va: int) -> str | None:
+        off = off_of(va - base)
+        if off is None:
+            return None
+        end = d.find(b"\0", off, min(off + 512, len(d)))
+        if end < 0:
+            return None
+        try:
+            return d[off:end].decode("ascii")
+        except UnicodeDecodeError:
+            return None
 
-    out: dict[str, tuple[str, int]] = {}
-    for m in re.finditer(rb"(?<=\x00)([A-Z][A-Za-z0-9]{2,40})(?=\x00)", d):
-        name = m.group(1).decode()
-        rva = rva_of(m.start())
-        if rva is None or (base + rva) not in pushes:
-            continue
-        for site in pushes[base + rva]:
-            # expect: push proto; push name; push fn   (5 bytes each)
-            if d[site - 5] != 0x68 or d[site + 5] != 0x68:
+    out = []
+    patterns = (
+        (rb"\x68(....)\x68(....)\x68(....)\xe8(....)", "stack"),
+        (rb"\x68(....)\xba(....)\xb9(....)\xe8(....)", "fastcall"),
+    )
+    for pattern, convention in patterns:
+        for m in re.finditer(pattern, d, re.S):
+            proto_va, name_va, fn_va = (struct.unpack("<I", m.group(i))[0] for i in (1, 2, 3))
+            site = rva_of(m.start())
+            if site is None or not any(
+                name == ".text" and va <= site and site + 20 <= va + rs for name, va, _, _, rs in img.sections
+            ):
                 continue
-            (proto_va,) = struct.unpack_from("<I", d, site - 4)
-            (fn_va,) = struct.unpack_from("<I", d, site + 6)
-            po = off_of(proto_va - base) if proto_va >= base else None
-            if po is None or d[po : po + 1] != b"(":
+            prototype, name = cstring(proto_va), cstring(name_va)
+            if not name or not re.fullmatch(r"[A-Z][A-Za-z0-9]{1,63}", name):
                 continue
-            proto = d[po : d.index(b"\0", po)].decode(errors="replace")
-            fo = off_of(fn_va - base) if fn_va >= base else None
-            if fo is None:
+            if not prototype or not re.fullmatch(r"\([A-Za-z0-9;]*\)[A-Za-z0-9;]+", prototype):
                 continue
-            out[name] = (proto, fn_va - base)
-            break
+            impl = fn_va - base
+            binder = site + 20 + struct.unpack("<i", m.group(4))[0]
+            if not all(
+                any(sec == ".text" and va <= rva < va + rs for sec, va, _, _, rs in img.sections)
+                for rva in (impl, binder)
+            ):
+                continue
+            out.append(Registration(name, prototype, impl, site, binder, convention))
+    return sorted(out, key=lambda r: r.site)
+
+
+def natives(img: Image) -> dict[str, tuple[str, int]]:
+    """Select unique implementations; never resolve ambiguous real implementations silently."""
+    sites = registrations(img)
+    users = Counter(r.implementation for r in sites)
+    grouped: dict[str, set[tuple[str, int]]] = {}
+    for r in sites:
+        grouped.setdefault(r.name, set()).add((r.prototype, r.implementation))
+    out = {}
+    for name, candidates in grouped.items():
+        if len(candidates) > 1:
+            # 1.27a has a second table binding names to `xor eax,eax; ret`.
+            # Retain it in registrations(), but do not mistake it for a real implementation.
+            real = {
+                c for c in candidates if users[c[1]] <= 1 or img.read(c[1], 3) not in (b"\x33\xc0\xc3", b"\x31\xc0\xc3")
+            }
+            if real:
+                candidates = real
+        if len(candidates) != 1:
+            raise ValueError(f"Ambiguous native {name}: {sorted(candidates)}; inspect registration sites")
+        out[name] = next(iter(candidates))
     return out
 
 
 def main() -> None:
-    img = Image(EXE)
+    sys.path.insert(0, str(Path(__file__).parent))
+    from disasm import EXE, Image
+
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("names", nargs="*")
+    ap.add_argument("--exe", type=Path, default=EXE, help="PE image, including Game.dll on 1.27a")
+    ap.add_argument("--registrations", action="store_true", help="JSON of every registration, including stubs")
+    a = ap.parse_args()
+    img = Image(a.exe)
+    if a.registrations:
+        print(json.dumps([asdict(r) for r in registrations(img) if not a.names or r.name in a.names], indent=2))
+        return
     table = natives(img)
-    want = sys.argv[1:]
+    want = a.names
     for name in sorted(table):
         if want and name not in want:
             continue

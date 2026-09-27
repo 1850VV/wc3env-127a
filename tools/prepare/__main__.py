@@ -10,6 +10,9 @@ def main():
     reference = commands.add_parser("reference", help="Extract the full stock game reference JSON")
     reference.add_argument("--output", type=Path, default=Path("wc3agent/src/wc3agent/game/data/reference.json"))
     reference.add_argument("--game-dir", type=Path)
+    reference.add_argument(
+        "--names-from", type=Path, help="Keep command/display names from an existing reference by object ID"
+    )
     map_info = commands.add_parser("map", help="Extract a stock melee map's start locations, mines, camps and shops")
     map_info.add_argument("--map", default="(2)EchoIsles.w3x")
     map_info.add_argument("--output", type=Path, default=Path("wc3agent/src/wc3agent/game/data/maps"))
@@ -22,7 +25,7 @@ def main():
     if args.command == "reference":
         from .reference import prepare_reference
 
-        prepare_reference(args.output, args.game_dir)
+        prepare_reference(args.output, args.game_dir, args.names_from)
     elif args.command == "footprints":
         from .hook_tables import prepare_footprints
 

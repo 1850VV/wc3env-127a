@@ -16,13 +16,16 @@ from __future__ import annotations
 
 import ctypes
 import json
+import shutil
 import uuid
 from ctypes import wintypes
 from pathlib import Path
 
 from .inject import k32, launch_with_dll
 from .pipe import HookPipe
+from .replay import find_replay_map, replay_map
 from .rpc import RpcClient
+from .runtime import prepare_runtime
 from .settings import settings
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -201,6 +204,8 @@ def launch(
     map_path = resolve_map(map)
     if map_path.suffix.lower() == ".w3g" and (_setup is not None or ai_difficulty is not None):
         raise ValueError("replay playback cannot apply match setup or AI difficulty overrides")
+    reference = replay_map(map_path) if map_path.suffix.lower() == ".w3g" else None
+    replay_source = find_replay_map(settings().game_dir, reference) if reference else None
     try:
         # Warcraft reads -loadfile through its ANSI command line, even though injection is Unicode.
         if str(map_path).encode("mbcs", errors="strict").decode("mbcs") != str(map_path):
@@ -215,11 +220,23 @@ def launch(
     if len(str(map_path)) >= 260 or len(str(docs / "Warcraft III" / "Replay" / "TempReplay.w3g")) >= 260:
         raise ValueError("Warcraft III requires paths shorter than 260 characters; choose shorter map/output paths")
     docs.mkdir(parents=True, exist_ok=True)
-    args = (["-window"] if window else []) + ["-loadfile", str(map_path)]
+    exe = prepare_runtime(settings().game_dir, docs / "Runtime")
+    if reference:
+        replay_target = exe.parent.joinpath(*reference.parts)
+        replay_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(replay_source, replay_target)
+    load_path = exe.parent / ("Replay" if map_path.suffix.lower() == ".w3g" else "Maps") / map_path.name
+    shutil.copy2(map_path, load_path)
+    # The 1.27a argument reader truncates quoted loadfile paths at a space.
+    # A relative path also works when the private installation's parent has spaces.
+    args = (["-window"] if window else []) + ["-loadfile", str(load_path.relative_to(exe.parent))]
+    dll = hook_dll()
+    private_dll = exe.parent / dll.name
+    shutil.copy2(dll, private_dll)
     # WC3HOOK_DOCS is read by wc3hook.dll; passed to the child only, so concurrent launches do not race
     pid, process_handle = launch_with_dll(
-        settings().game_exe,
-        hook_dll(),
+        exe,
+        private_dll,
         args,
         env={
             "WC3HOOK_DOCS": str(docs),

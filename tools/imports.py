@@ -1,4 +1,4 @@
-"""Resolve IAT slots of Warcraft III.exe to dll!name, so `call dword ptr [0xe661a8]` in a
+"""Resolve IAT slots of Game.dll to dll!name, so `call dword ptr [0xe661a8]` in a
 disassembly can be read.
 
     python tools/imports.py e661a8 e6625c        # VAs or RVAs (hex); VAs have the 0x400000 base
@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from wc3env.settings import settings
 
-EXE = settings().game_exe
+EXE = settings().game_dir / "Game.dll"
 
 
 def iat_map(path: Path) -> tuple[dict[int, str], int]:

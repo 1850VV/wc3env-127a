@@ -4,6 +4,42 @@
 char g_dir[MAX_PATH];
 HANDLE g_log = INVALID_HANDLE_VALUE;
 BYTE *g_base;
+static HMODULE(WINAPI *LoadLibraryA_orig)(LPCSTR);
+static volatile LONG g_engine_ready;
+
+/* War3.exe loads the engine after resuming. Install engine hooks before its
+ * GameMain runs; the bootstrap-ready event only releases the suspended launcher. */
+static void engine_loaded(HMODULE module) {
+    if (!module || module != GetModuleHandleW(L"Game.dll") || InterlockedCompareExchange(&g_engine_ready, 1, 0))
+        return;
+    g_base = (BYTE *)module;
+    if (memcmp(g_base + P127_GET_UNIT_X, "\x55\x8b\xec\x8b\x4d\x08", 6) ||
+        memcmp(g_base + P127_GAME_UPDATE, "\x55\x8b\xec\x6a\xff", 5)) {
+        hook_log("1.27a engine prologue mismatch");
+        ExitProcess(1);
+    }
+    clock_init_hooks();
+    accessors_init();
+    step_init_hooks();
+    players_init_hooks();
+    setup_init_hooks();
+    act_init_hooks();
+    events_init_hooks();
+    result_init_hooks();
+    require_hook(MH_EnableHook(MH_ALL_HOOKS), "enable 1.27a engine hooks");
+    hook_log("1.27a engine initialized base=%p", g_base);
+    InterlockedExchange(&g_engine_ready, 2);
+}
+
+static HMODULE WINAPI LoadLibraryA_hook(LPCSTR name) {
+    HMODULE result = LoadLibraryA_orig(name);
+    engine_loaded(result);
+    return result;
+}
+
+__declspec(dllexport) int WC3Adapter127(void) {
+    return 127;
+}
 
 MH_STATUS require_hook(MH_STATUS status, const char *name) {
     if (status != MH_OK) {
@@ -47,20 +83,15 @@ static DWORD WINAPI main_thread(LPVOID arg) {
     SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
     {
         require_hook(MH_Initialize(), "MinHook initialization");
-        allocator_init_hooks();
         rpc_init();
-        clock_init_hooks();
-        accessors_init();
+        if (!LoadLibraryW(L"shell32.dll") || !LoadLibraryW(L"Mss32.dll"))
+            ExitProcess(1);
         instance_init_hooks();
         diag_init_hooks();
-        step_init_hooks();
-        players_init_hooks();
-        setup_init_hooks();
-        act_init_hooks();
-        events_init_hooks();
-        result_init_hooks();
+        MH_CreateHookApi(L"kernel32", "LoadLibraryA", LoadLibraryA_hook, (void **)&LoadLibraryA_orig);
         CreateThread(NULL, 0, heartbeat_thread, NULL, 0, NULL);
         require_hook(MH_EnableHook(MH_ALL_HOOKS), "enable hooks");
+        engine_loaded(GetModuleHandleW(L"Game.dll"));
     }
     {
         /* Tell the injector the hooks are in place; it resumes the game's main thread only then,
@@ -74,6 +105,8 @@ static DWORD WINAPI main_thread(LPVOID arg) {
             hook_log("signalled %s", ev);
         }
     }
+    while (g_engine_ready != 2)
+        Sleep(10);
     pipe_thread(NULL);
     return 0;
 }

@@ -27,7 +27,7 @@ static int slot(int handle) {
     return NATIVE(RVA_N_PLAYERID, NativeI_I)(handle);
 }
 static void seed_rng(void) {
-    NATIVE(0x0a99a0, SetOneFn)(g_seed);
+    NATIVE(RVA_N_SETRANDOMSEED, SetOneFn)(g_seed);
 }
 static void __cdecl players_hook(int count) {
     Players_orig(count);
@@ -67,15 +67,15 @@ static void __fastcall resolve_races_hook(BYTE *players, void *edx) {
             continue;
         if (g_races[p]) {
             int race = g_races[p] == 1 ? 1 : g_races[p] == 2 ? 2 : g_races[p] == 8 ? 3 : 4;
-            *(DWORD *)(player + 0x2bc) = (*(DWORD *)(player + 0x2bc) & 0x40) | g_races[p];
-            *(DWORD *)(player + 0x2c0) = race;
+            *(DWORD *)(player + 0x25c) = (*(DWORD *)(player + 0x25c) & 0x40) | g_races[p];
+            *(DWORD *)(player + 0x260) = race;
         }
-        if ((g_computers & (1u << p)) || *(DWORD *)(player + 0x2d0) == 0) {
+        if ((g_computers & (1u << p)) || *(DWORD *)(player + 0x270) == 0) {
             /* Additional map-defined slots start as computer slots; agent startup
              * AI is suppressed by players.c. Do not invent map slots or human peers. */
-            *(DWORD *)(player + 0x2d0) = 1;
-            *(DWORD *)(player + 0x2c8) = 1;
-            ((ResolveRacesFn)(g_base + 0x0c1450))(player, NULL);
+            *(DWORD *)(player + 0x268) = 1;
+            *(DWORD *)(player + 0x270) = 1;
+            ((ResolveRacesFn)(g_base + RVA_PLAYER_REFRESH_CONTROL))(player, NULL);
         }
     }
 }
@@ -92,7 +92,8 @@ static void __fastcall assign_starts_hook(void *lobby, void *edx) {
     for (int p = 0; p < 16; p++) {
         if (!(g_players & (1u << p)))
             continue;
-        int loc = NATIVE(0x0949a0, NativeI_I)(NATIVE(RVA_N_PLAYER, NativeI_I)(p)); /* GetPlayerStartLocation */
+        int loc = NATIVE(RVA_N_GETPLAYERSTARTLOCATION,
+                         NativeI_I)(NATIVE(RVA_N_PLAYER, NativeI_I)(p)); /* GetPlayerStartLocation */
         if (loc >= 0 && loc < 16 && (g_defined & (1u << loc)) && !(used & (1u << loc)))
             used |= 1u << loc;
         else
@@ -221,7 +222,8 @@ void setup_init_hooks(void) {
             !jr_str(yyjson_obj_get(p, "control"), control, sizeof control))
             goto invalid;
         g_players |= 1u << id;
-        if (!strcmp(control, "computer") || !strcmp(control, "agent_ai")) /* agent_ai: an agent slot loaded as a computer */
+        if (!strcmp(control, "computer") ||
+            !strcmp(control, "agent_ai")) /* agent_ai: an agent slot loaded as a computer */
             g_computers |= 1u << id;
         else if (strcmp(control, "agent"))
             goto invalid;
@@ -247,14 +249,14 @@ void setup_init_hooks(void) {
     }
     yyjson_doc_free(doc);
     g_enabled = 1;
-    MH_CreateHook(g_base + 0x0a9990, players_hook, (void **)&Players_orig);
-    MH_CreateHook(g_base + 0x0a9720, race_hook, (void **)&Race_orig);
-    MH_CreateHook(g_base + 0x0a9570, controller_hook, (void **)&Controller_orig);
-    MH_CreateHook(g_base + 0x08f200, location_hook, (void **)&Location_orig);
-    MH_CreateHook(g_base + 0x0a9780, start_hook, (void **)&Start_orig);
-    MH_CreateHook(g_base + 0x0908a0, force_start_hook, (void **)&ForceStart_orig);
-    MH_CreateHook(g_base + 0x07ea50, resolve_races_hook, (void **)&ResolveRaces_orig);
-    MH_CreateHook(g_base + 0x07ed10, assign_starts_hook, (void **)&AssignStarts_orig);
+    MH_CreateHook(g_base + RVA_N_SETPLAYERS, players_hook, (void **)&Players_orig);
+    MH_CreateHook(g_base + RVA_N_SETPLAYERRACEPREFERENCE, race_hook, (void **)&Race_orig);
+    MH_CreateHook(g_base + RVA_N_SETPLAYERCONTROLLER, controller_hook, (void **)&Controller_orig);
+    MH_CreateHook(g_base + RVA_N_DEFINESTARTLOCATION, location_hook, (void **)&Location_orig);
+    MH_CreateHook(g_base + RVA_N_SETPLAYERSTARTLOCATION, start_hook, (void **)&Start_orig);
+    MH_CreateHook(g_base + RVA_N_FORCEPLAYERSTARTLOCATION, force_start_hook, (void **)&ForceStart_orig);
+    MH_CreateHook(g_base + RVA_RESOLVE_RACES, resolve_races_hook, (void **)&ResolveRaces_orig);
+    MH_CreateHook(g_base + RVA_ASSIGN_STARTS, assign_starts_hook, (void **)&AssignStarts_orig);
     return;
 invalid:
     yyjson_doc_free(doc);

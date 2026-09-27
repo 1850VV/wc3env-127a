@@ -2,10 +2,10 @@
  *
  * Every playerunitevent the observation reports (EVENT_PLAYER_UNIT_DEATH and the rest of
  * common.j's ConvertPlayerUnitEvent ids) is fired the same way: a per-kind function builds an
- * event object (a ref pair of the trigger unit at +0x20/+0x24, of a second widget at +0x38/+0x3c,
- * a third at +0x44/+0x48, an int or ref pair at +0x50/+0x54), then calls
- *   0xbcd00(this = unit, eventid = 0x80200 + id, object)          (thiscall)
- * which runs the registered triggers. The kinds themselves fire only if 0x43f0c0(eventid) says
+ * event object (a ref pair of the trigger unit at +0x2c/+0x30, of a second widget at +0x38/+0x3c,
+ * an argument at +0x44/+0x48), then calls
+ *   0x245080(this = unit, eventid = 0x80200 + id, object)          (thiscall)
+ * which runs the registered triggers. The kinds themselves fire only if 0x0566d0(eventid) says
  * something is registered, which on a stock map nothing is; that check is detoured so ours fire.
  * Events enter each observer's log only if visible when fired (own unit, or in that player's
  * fog). Separate bounded
@@ -16,7 +16,6 @@
  */
 #include "wc3hook.h"
 
-#define RVA_FIRE_EVENT 0x0bcd00
 #define EV_BASE 0x80200
 typedef int(__fastcall *FireEventFn)(void *unit, void *edx, int eventid, BYTE *obj);
 static FireEventFn FireEvent_orig;
@@ -60,7 +59,7 @@ static void ev_unit(Event *e, BYTE *unit) { /* the unit as it is now: type, owne
         return;
     BYTE *pl = unit_owner(unit);
     e->owner = pl ? player_jass_id(pl) : -1;
-    e->type = *(DWORD *)(unit + 0x34);
+    e->type = *(DWORD *)(unit + 0x30);
     e->unit_id = obs_id(unit);
     e->seen = seen_by(unit, e->owner);
 }
@@ -72,20 +71,19 @@ static BYTE *ref_obj(BYTE *obj, int off) {
     return ((ResolveRefFn)(g_base + RVA_RESOLVE_REF))(id, salt);
 }
 
-/* The spell-effect fire function (0xbbd60, thiscall: this = the player, args unit, ability) stores
+/* The spell-effect fire function (0x244300, thiscall: this = the player, args unit, ability) stores
  * the ability into the event object as a ref pair that resolves to an agent node without a way
  * back to the ability object, so the ability id is read here from the argument, the way
  * GetSpellAbilityId reads it from the handle's object, and the dispatcher hook picks it up. */
-#define RVA_FIRE_SPELL_EFFECT 0x0bbd60
 typedef int(__fastcall *FireSpellFn)(void *player, void *edx, BYTE *unit, BYTE *ability);
 static FireSpellFn FireSpell_orig;
 static DWORD ability_id(BYTE *ab);
 static int __fastcall FireSpell_hook(void *player, void *edx, BYTE *unit, BYTE *ability) {
     __try {
-        if (g_players && unit) { /* recorded here, whole: the dispatcher hook skips id 277 */
+        if (g_players && unit) { /* recorded here, whole: the dispatcher hook skips id 274 */
             DWORD ab = ability ? ability_id(ability) : 0;
             Event e = {0};
-            e.id = 277;
+            e.id = 274;
             e.argument = ab;
             ev_unit(&e, unit);
             ev_append(&e);
@@ -99,7 +97,6 @@ static int __fastcall FireSpell_hook(void *player, void *edx, BYTE *unit, BYTE *
  * (thiscall: this, eventid -> bool; the fire functions call it as VA 0x83f0c0) says a trigger is
  * registered for that kind, which on a stock map nothing is. The check is detoured to say yes for
  * the kinds the observation reports (its own bookkeeping still runs). */
-#define RVA_EVENT_REGISTERED 0x043f0c0 /* thiscall(this, eventid): [this+8] -> 0x43f100(mgr; id, 0), a pure query */
 typedef int(__fastcall *EventRegisteredFn)(void *self, void *edx, int eventid);
 static EventRegisteredFn EventRegistered_orig;
 static int wanted_kind(int id) {
@@ -123,8 +120,8 @@ static int wanted_kind(int id) {
     case 47:
     case 49:
     case 50:
+    case 271:
     case 274:
-    case 277:
         return 1;
     }
     return 0;
@@ -140,7 +137,7 @@ typedef struct {
     BYTE *node[3], *object[3];
     int remaining;
 } EventRefs;
-static int __cdecl event_object_cb(BYTE *o, void *ctx) {
+static int __fastcall event_object_cb(BYTE *o, void *ctx) {
     EventRefs *refs = (EventRefs *)ctx;
     BYTE *node = ref_obj(o, 0xc);
     for (int i = 0; i < 3; i++) {
@@ -158,15 +155,15 @@ static unsigned event_object_id(BYTE *o, BYTE *node) {
 static int __fastcall FireEvent_hook(void *unit, void *edx, int eventid, BYTE *obj) {
     __try {
         int id = eventid - EV_BASE;
-        if (g_players && obj && id != 277 && wanted_kind(id)) {
+        if (g_players && obj && id != 274 && wanted_kind(id)) {
             /* the event object's slots: +0x38 the trigger unit, +0x44 the second unit, +0x50 an int, a
              * type id or a ref pair (the item, the ability); `this` of the dispatcher is not the unit */
             EventRefs refs = {0};
-            refs.node[0] = ref_obj(obj, 0x38);
-            if (id == 18 || id == 34 || id == 47 || id == 274)
-                refs.node[1] = ref_obj(obj, 0x44);
-            if (id == 49 || id == 50 || id == 274)
-                refs.node[2] = ref_obj(obj, 0x50);
+            refs.node[0] = ref_obj(obj, 0x2c);
+            if (id == 18 || id == 34 || id == 47 || id == 271)
+                refs.node[1] = ref_obj(obj, 0x38);
+            if (id == 49 || id == 50 || id == 271)
+                refs.node[2] = ref_obj(obj, 0x44);
             for (int i = 0; i < 3; i++)
                 if (refs.node[i])
                     refs.remaining++;
@@ -176,7 +173,7 @@ static int __fastcall FireEvent_hook(void *unit, void *edx, int eventid, BYTE *o
                 ((EnumObjectsFn)(g_base + RVA_ENUM_OBJECTS))(ITEM_CLASS, (void *)event_object_cb, &refs, 0);
             Event e = {0};
             e.id = id;
-            e.argument = *(DWORD *)(obj + 0x50);
+            e.argument = *(DWORD *)(obj + 0x44);
             ev_unit(&e, refs.object[0]);
             e.unit_id = event_object_id(refs.object[0], refs.node[0]);
             e.other_id = event_object_id(refs.object[1], refs.node[1]);
@@ -189,8 +186,8 @@ static int __fastcall FireEvent_hook(void *unit, void *edx, int eventid, BYTE *o
                     if ((g_players & (1u << p)) && object_visible(refs.object[2], ITEM_CLASS, p))
                         e.item_seen |= 1u << p;
             e.item_id = event_object_id(refs.object[2], refs.node[2]);
-            e.other_type = refs.object[1] ? *(DWORD *)(refs.object[1] + 0x34) : 0;
-            e.item_type = refs.object[2] ? *(DWORD *)(refs.object[2] + 0x34) : 0;
+            e.other_type = refs.object[1] ? *(DWORD *)(refs.object[1] + 0x30) : 0;
+            e.item_type = refs.object[2] ? *(DWORD *)(refs.object[2] + 0x30) : 0;
             if (e.owner >= 0 && e.owner < 16)
                 e.item_seen |= 1u << e.owner;
             if (id == 41 && refs.object[0])
@@ -202,7 +199,7 @@ static int __fastcall FireEvent_hook(void *unit, void *edx, int eventid, BYTE *o
     return FireEvent_orig(unit, edx, eventid, obj);
 }
 
-/* a ref pair at an address, resolved the way the order and ability accessors do (0x3fc7e0, ecx = &pair) */
+/* a ref pair at an address, resolved the way the order and ability accessors do (0x044150, ecx = &pair) */
 static __declspec(naked) BYTE *__cdecl pair_obj(BYTE *pair) {
     __asm {
         mov ecx, [esp + 4]
@@ -219,13 +216,8 @@ static __declspec(naked) BYTE *__cdecl pair_obj(BYTE *pair) {
 /* an ability's type id, as GetSpellAbilityId reads it: the handle's object -> its +0x50 pair (0xbd480)
  * -> that object's +0x2c pair (0x290bd0) -> +0x34. The event's +0x50 pair may point at either level. */
 static DWORD ability_id(BYTE *ab) {
-    BYTE *x = pair_obj(ab + 0x50);
-    BYTE *t;
-    if (x && (t = pair_obj(x + 0x2c)) != NULL)
-        return *(DWORD *)(t + 0x34);
-    if ((t = pair_obj(ab + 0x2c)) != NULL)
-        return *(DWORD *)(t + 0x34);
-    return 0;
+    BYTE *ability = pair_obj(ab + 0x2c);
+    return ability ? *(DWORD *)(ability + 0x34) : 0;
 }
 
 /* one event: {"kind": k, <fields>} */
@@ -378,14 +370,14 @@ unsigned emit_events(JW *w, int player) {
             ev_id("attacker_id", va);
             ev_end();
             break;
-        case 274:
+        case 271:
             ev("item_sold");
             ev_id("unit_id", ua);
             ev_id("buyer_id", va);
             ev_type("type_id", (e->item_seen & (1u << player)) ? e->item_type : 0);
             ev_end();
             break;
-        case 277:
+        case 274:
             ev("spell_effect");
             ev_id("unit_id", ua);
             ev_type("ability_id", e->argument);

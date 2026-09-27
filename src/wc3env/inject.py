@@ -230,6 +230,18 @@ def launch_with_dll(
     concurrent launches do not race on os.environ. Returns (pid, process_handle); the caller must close the handle. Raises on failure."""
     exe, dll = exe.resolve(), dll.resolve()
     digest = verify_executable(exe)
+    _export_rva(str(dll), b"WC3Adapter127")
+    return _launch_verified(exe, dll, args, ready_timeout, {**(env or {}), "WC3HOOK_EXE_HASH": digest})
+
+
+def _launch_verified(
+    exe: Path, dll: Path, args: list[str], ready_timeout: float, env: dict[str, str]
+) -> tuple[int, int]:
+    """Injection mechanism after binary-policy validation by the caller.
+
+    Kept private: public launches must pass verify_executable. The separately built
+    1.27 research probe validates both War3.exe and Game.dll before using this mechanism.
+    """
     if not dll.is_file():
         raise FileNotFoundError(f"Build wc3hook/build.bat first, or set WC3_HOOK_DLL: {dll}")
     if ctypes.sizeof(ctypes.c_void_p) != 8:
@@ -241,7 +253,7 @@ def launch_with_dll(
     load = kernel32_32_base() + _export_rva(
         os.path.join(os.environ["WINDIR"], "SysWOW64", "kernel32.dll"), b"LoadLibraryW"
     )
-    block = _env_block({**(env or {}), "WC3HOOK_EXE_HASH": digest})
+    block = _env_block(env)
     if not k32.CreateProcessW(
         str(exe),
         ctypes.create_unicode_buffer(cmd),

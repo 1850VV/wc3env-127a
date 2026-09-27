@@ -131,7 +131,7 @@ static void m_info(JW *w, LONGLONG id) {
     jw_key(w, "exe_hash");
     jw_string(w, g_exe_hash);
     jw_key(w, "game_version");
-    jw_string(w, "1.29.2.9231");
+    jw_string(w, "1.27.0.52240");
     jw_key(w, "dll_version");
     jw_string(w, DLL_VERSION);
     jw_key(w, "mode");
@@ -574,9 +574,8 @@ static void m_act(JW *w, LONGLONG id, yyjson_val *params) {
             if (token != NULL && (!jr_str(token, value, sizeof value) || (q < 3 && strlen(value) != 4)))
                 it->reason = RJ_BAD_ARGS;
         }
-        static const char *KNOWN[] = {"move",     "stop",  "attack", "smart",    "harvest",   "build",  "train",
-                                      "research", "learn", "cast",   "use_item", "drop_item", "select", "buy",
-                                      "revive"};
+        static const char *KNOWN[] = {"move",  "stop", "attack",   "smart",     "harvest", "build", "train", "research",
+                                      "learn", "cast", "use_item", "drop_item", "select",  "buy",   "revive"};
         int known = 0;
         for (size_t q = 0; q < sizeof KNOWN / sizeof KNOWN[0]; q++)
             if (strcmp(it->command, KNOWN[q]) == 0)

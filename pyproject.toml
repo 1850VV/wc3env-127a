@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wc3env"
-version = "0.1.0"
+version = "0.1.0+wc3127a"
 description = "A native Warcraft III environment with observations, actions and time control"
 requires-python = ">=3.11"
 readme = "README.md"

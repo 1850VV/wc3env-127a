@@ -47,7 +47,7 @@ class Settings:
 
     @property
     def game_exe(self) -> Path:
-        return self.game_dir / "Warcraft III.exe"
+        return self.game_dir / "War3.exe"
 
 
 @lru_cache(maxsize=1)

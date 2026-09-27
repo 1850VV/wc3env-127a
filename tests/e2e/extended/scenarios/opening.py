@@ -21,7 +21,7 @@ class Opening(ScenarioAgent):
                     return []  # re-issuing a build order restarts the construction
                 hall_unit = v.first(hall)
                 builder = v.own(worker)[-1]
-                where = {"type_id": type_id, "x": hall_unit["x"] + dx, "y": hall_unit["y"] + dy}
+                where = {"type_id": type_id, "x": hall_unit["x"] + dx, "y": hall_unit["y"] + dy, "auto_place": True}
                 return [Action(builder["unit_id"], "build", where)]
 
             return act

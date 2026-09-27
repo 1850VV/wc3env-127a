@@ -44,7 +44,7 @@ int game_is_replay(void) {
     return g_game && *(DWORD *)(g_game + GAME_CONNECTION) == 1;
 }
 int game_is_offline(void) {
-    DWORD provider = g_game ? *(DWORD *)(g_game + 0x2650) : 0;
+    DWORD provider = g_game ? *(DWORD *)(g_game + P127_GAME_PROVIDER) : 0;
     return provider == 0x4c4f4f50 || provider == 0x4e4f4e45;
 }
 
@@ -102,38 +102,6 @@ static int g_holding;
 static int g_end_requested;
 static int g_restarting;
 
-/* CGameUI registers events 11/12/14 but its destructor removes only 11. Complete
- * the native unregistration while the
- * owning UI is still alive (48 bytes/reset). */
-typedef void(__fastcall *GameUiDestroyFn)(void *, void *);
-static GameUiDestroyFn GameUiDestroy_orig;
-static void __fastcall GameUiDestroy_hook(void *self, void *edx) {
-    typedef void(__cdecl * UnregisterFn)(int, void *, void *, int);
-    UnregisterFn unregister = (UnregisterFn)(g_base + RVA_EVENT_UNREGISTER);
-    unregister(12, g_base + RVA_GAME_UI_EVENT12, self, -1);
-    unregister(14, g_base + RVA_GAME_UI_EVENT14, self, -1);
-    GameUiDestroy_orig(self, edx);
-}
-
-/* Connection observers survive reload. Native teardown clears targets during
- * dispatch but leaves their nodes in
- * seldom-used buckets. At the new hold all
- * dispatches have unwound; native rehashing returns those nodes to their
- * pool. */
-static void cleanup_game_observers(BYTE *game) {
-    typedef void(__fastcall * RehashFn)(BYTE *, void *, void **);
-    for (unsigned connection = 0; connection < 2; connection++) {
-        for (unsigned observer = 0; observer < 2; observer++) {
-            BYTE *table = *(BYTE **)(game + connection * 0x448 + observer * 12 + 0x14);
-            if (!table || table[0])
-                continue; /* active iterators must keep their links */
-            void *nodes = NULL;
-            ((RehashFn)(g_base + RVA_OBSERVER_COLLECT))(table, NULL, &nodes);
-            ((RehashFn)(g_base + RVA_OBSERVER_REHASH))(table, NULL, &nodes);
-        }
-    }
-}
-
 void step_restart(void) {
     step_mode(0);
     g_held = g_holding = g_end_requested = 0;
@@ -158,7 +126,6 @@ static void step_finish(BYTE *t, const char *why) {
         hook_log("step ended early (%s): gametime %lu target %lu", why, gt, g_step_target);
     g_step_frames_last = g_step_frames;
     if (g_holding) {
-        cleanup_game_observers(t);
         setup_hold();
         g_holding = 0;
         g_held = 1;
@@ -175,6 +142,10 @@ void step_end_after_turn(void) {
 
 int __fastcall GameUpdate_hook(void *self, void *edx, DWORD now) {
     BYTE *t = (BYTE *)self;
+    if (*(DWORD *)(t + P127_GAME_STATE) < 4)
+        return GameUpdate_orig(self, edx, now);
+    InterlockedIncrement(&g_frames_seen);
+    g_frame_tls = TlsGetValue(*(DWORD *)(g_base + RVA_TLS_SLOT));
     if (g_restarting) {
         if (*(DWORD *)(t + GAME_TIME_MS) > 25)
             return GameUpdate_orig(self, edx, now);
@@ -245,12 +216,15 @@ int __fastcall GameUpdate_hook(void *self, void *edx, DWORD now) {
 /* Render off suppresses Direct3D presentation while preserving Warcraft's frame cleanup,
  * which releases retired
  * textures. Draw calls and scene boundaries still run. */
-typedef int(__cdecl *GxPresentFn)(int flags);
-static GxPresentFn GxPresent_orig;
 typedef HRESULT(WINAPI *D3dPresentFn)(void *, const RECT *, const RECT *, HWND, const RGNDATA *);
 static D3dPresentFn D3dPresent_orig;
 static HRESULT WINAPI D3dPresent_hook(void *device, const RECT *src, const RECT *dst, HWND window,
                                       const RGNDATA *dirty) {
+    static LONG previous = -1;
+    if (previous != g_render) {
+        previous = g_render;
+        hook_log("D3D9 presentation: %s", previous ? "enabled" : "suppressed");
+    }
     if (g_render)
         return D3dPresent_orig(device, src, dst, window, dirty);
     /* Finish GPU work even without presentation, so retired buffers can be reclaimed. */
@@ -269,31 +243,36 @@ static HRESULT WINAPI D3dPresent_hook(void *device, const RECT *src, const RECT 
     IDirect3DQuery9_Release(query);
     return hr;
 }
-/* The D3D device exists only once frames start. Its COM method survives map reloads. */
-static void hook_d3d_present(void) {
-    BYTE *gx = *(BYTE **)(g_base + RVA_GX_DEVICE);
-    if (!gx || *(BYTE **)gx != g_base + RVA_GX_D3D9_VTABLE || !*(void **)(gx + GX_D3D9_DEVICE)) {
-        hook_log("render off requires the Direct3D 9 backend");
-        ExitProcess(1);
+typedef HRESULT(WINAPI *CreateDeviceFn)(IDirect3D9 *, UINT, D3DDEVTYPE, HWND, DWORD, D3DPRESENT_PARAMETERS *,
+                                        IDirect3DDevice9 **);
+static CreateDeviceFn CreateDevice_orig;
+static IDirect3D9 *(WINAPI *Direct3DCreate9_orig)(UINT);
+static HRESULT WINAPI CreateDevice_hook(IDirect3D9 *self, UINT adapter, D3DDEVTYPE type, HWND window, DWORD behavior,
+                                        D3DPRESENT_PARAMETERS *params, IDirect3DDevice9 **out) {
+    HRESULT hr = CreateDevice_orig(self, adapter, type, window, behavior, params, out);
+    if (SUCCEEDED(hr) && out && *out && !D3dPresent_orig) {
+        void *present = (*(void ***)*out)[17];
+        MH_CreateHook(present, D3dPresent_hook, (void **)&D3dPresent_orig);
+        require_hook(MH_EnableHook(present), "D3D9 Present");
+        hook_log("D3D9 device: Present hook installed");
     }
-    void *device = *(void **)(gx + GX_D3D9_DEVICE);
-    void *present = (*(void ***)device)[17]; /* IDirect3DDevice9::Present */
-    MH_CreateHook(present, (void *)D3dPresent_hook, (void **)&D3dPresent_orig);
-    require_hook(MH_EnableHook(present), "IDirect3DDevice9::Present");
+    return hr;
 }
-volatile LONG g_frames_seen; /* heartbeat: frames run only while the clock moves */
-/* The game keeps a per-thread component table in a TLS slot; the frame loop installs it before
- * each frame (0x5dff0) and the visibility check reads component 0xd through it (0x26d280).
- * Between steps the clock stands still, no frame runs, and the game thread sits in its pacing
- * wait with the slot empty, so an RPC job serviced there installs the table itself. */
-static int __cdecl GxPresent_hook(int flags) {
-    InterlockedIncrement(&g_frames_seen);
-    g_frame_tls = TlsGetValue(*(DWORD *)(g_base + RVA_TLS_SLOT));
-    rpc_service_jobs();
-    if (!g_render && !D3dPresent_orig)
-        hook_d3d_present();
-    return GxPresent_orig(flags);
+static IDirect3D9 *WINAPI Direct3DCreate9_hook(UINT version) {
+    IDirect3D9 *result = Direct3DCreate9_orig(version);
+    if (result && !CreateDevice_orig) {
+        void *create = (*(void ***)result)[16];
+        MH_CreateHook(create, CreateDevice_hook, (void **)&CreateDevice_orig);
+        require_hook(MH_EnableHook(create), "D3D9 CreateDevice");
+    }
+    return result;
 }
+static void render_init_hooks(void) {
+    if (!LoadLibraryW(L"d3d9.dll"))
+        ExitProcess(1);
+    MH_CreateHookApi(L"d3d9", "Direct3DCreate9", Direct3DCreate9_hook, (void **)&Direct3DCreate9_orig);
+}
+volatile LONG g_frames_seen;
 /* from the frame loop's pacing wait (clock.c): the one place the game thread passes between steps */
 void rpc_service_jobs_between_frames(void) {
     if (!rpc_job_pending() || !g_frame_tls)
@@ -306,14 +285,14 @@ void rpc_service_jobs_between_frames(void) {
 }
 
 /* ---- turn packets -----------------------------------------------------------------------
- * The offline host builds F7/0C packets at 0x557be0. Bound their time before transmission;
+ * The offline host builds F7/0C packets at 0x874a10. Bound their time before transmission;
  * Warcraft still owns sequencing, transport, parsing and acknowledgements. Zero-time F7/48
  * action fragments stay unchanged. Realtime and remote providers use native scheduling.
  * The host thread owns the sent total and resets it with the native packet counter.
  * `pktlog <n>` traces delivery through Storm event 0x18 to the game's packet queue. */
-typedef int(__cdecl *PktDeliverFn)(BYTE *msg, void *arg);
+typedef int(__fastcall *PktDeliverFn)(BYTE *msg, void *arg);
 static PktDeliverFn PktDeliver_orig;
-static int __cdecl PktDeliver_hook(BYTE *msg, void *arg) {
+static int __fastcall PktDeliver_hook(BYTE *msg, void *arg) {
     if (msg && g_pktlog > 0) {
         InterlockedDecrement(&g_pktlog);
         BYTE *d = *(BYTE **)(msg + 8);
@@ -330,11 +309,11 @@ static int __cdecl PktDeliver_hook(BYTE *msg, void *arg) {
 }
 
 static DWORD g_sent_ms, g_produce_ms;
-typedef int(__cdecl *TurnProducerFn)(BYTE *, int);
+typedef int(__fastcall *TurnProducerFn)(BYTE *, void *);
 static TurnProducerFn TurnProducer_orig;
-typedef BYTE *(__cdecl *TurnTimeFn)(BYTE *, const WORD *);
+typedef BYTE *(__fastcall *TurnTimeFn)(BYTE *, const WORD *);
 static TurnTimeFn TurnTime_orig;
-static BYTE *__cdecl TurnTime_hook(BYTE *store, const WORD *ms) {
+static BYTE *__fastcall TurnTime_hook(BYTE *store, const WORD *ms) {
     if ((BYTE *)_ReturnAddress() == g_base + RVA_TURN_TIME_RET) {
         WORD credit = *ms ? (WORD)g_produce_ms : 0;
         if (g_produce_ms)
@@ -344,8 +323,8 @@ static BYTE *__cdecl TurnTime_hook(BYTE *store, const WORD *ms) {
     }
     return TurnTime_orig(store, ms);
 }
-static int __cdecl TurnProducer_hook(BYTE *host, int arg) {
-    if (!*(DWORD *)(host + 0x2e8))
+static int __fastcall TurnProducer_hook(BYTE *host, void *arg) {
+    if (!*(DWORD *)(host + P127_HOST_TIME_COUNT))
         g_sent_ms = 0;
     g_produce_ms = 0;
     if (g_stepmode && game_is_offline()) {
@@ -359,13 +338,11 @@ static int __cdecl TurnProducer_hook(BYTE *host, int arg) {
 }
 
 void step_init_hooks(void) {
-    require_hook(MH_CreateHook(g_base + RVA_GAME_UI_DESTROY, GameUiDestroy_hook, (void **)&GameUiDestroy_orig),
-                 "game UI event cleanup");
     MH_STATUS a = MH_CreateHook(g_base + RVA_TURN_PRODUCER, (void *)TurnProducer_hook, (void **)&TurnProducer_orig);
     MH_STATUS b = MH_CreateHook(g_base + RVA_TURN_TIME_WRITE, (void *)TurnTime_hook, (void **)&TurnTime_orig);
     hook_log("turn producer: %s, time writer: %s", MH_StatusToString(a), MH_StatusToString(b));
     MH_CreateHook(g_base + RVA_PKT_DELIVER, (void *)PktDeliver_hook, (void **)&PktDeliver_orig);
     MH_STATUS s = MH_CreateHook(g_base + RVA_GAMEUPDATE, (void *)GameUpdate_hook, (void **)&GameUpdate_orig);
-    MH_STATUS p = MH_CreateHook(g_base + RVA_GXPRESENT, (void *)GxPresent_hook, (void **)&GxPresent_orig);
-    hook_log("GameUpdate hook: %s, GxPresent hook: %s", MH_StatusToString(s), MH_StatusToString(p));
+    hook_log("GameUpdate hook: %s", MH_StatusToString(s));
+    render_init_hooks();
 }
