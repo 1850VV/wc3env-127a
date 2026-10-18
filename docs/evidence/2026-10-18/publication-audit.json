@@ -1,0 +1,217 @@
+{
+  "scope": "All locally reachable objects, including local and remote refs",
+  "rules": [
+    "github_token",
+    "provider_key",
+    "aws_access_id",
+    "private_key",
+    "credential_url"
+  ],
+  "text_blobs": 411,
+  "total_blobs": 425,
+  "binary_blobs": [
+    {
+      "path": "docs/media/blunder-base.jpg",
+      "oid": "f032a285e4656d07172d33a4cd815271026f3002",
+      "bytes": 179445
+    },
+    {
+      "path": "docs/media/blunder-base.mp4",
+      "oid": "8a1d89e62f909d7806266ff79e718c6285a37acc",
+      "bytes": 15347234
+    },
+    {
+      "path": "docs/media/blunder-towers.jpg",
+      "oid": "74b1ce94dd0713241c3990fe13c84247c93ba7fa",
+      "bytes": 162850
+    },
+    {
+      "path": "docs/media/blunder-towers.mp4",
+      "oid": "75bad61186a40f6226eecf7cabbf62d21528d3b5",
+      "bytes": 20301723
+    },
+    {
+      "path": "docs/media/duel-human.jpg",
+      "oid": "8a9e82fceda6149592859e55c8c3cbd6a3170a39",
+      "bytes": 144383
+    },
+    {
+      "path": "docs/media/duel-human.mp4",
+      "oid": "e1082025dcf7d1942a393b460d61a3b68b3215b3",
+      "bytes": 18745741
+    },
+    {
+      "path": "docs/media/duel-nightelf.jpg",
+      "oid": "e051c86f039b62910ec73e334c0e2d859c0a3a47",
+      "bytes": 145373
+    },
+    {
+      "path": "docs/media/duel-nightelf.mp4",
+      "oid": "5ff6d7977e92498b01c3e18c7795d0573856b9ad",
+      "bytes": 15355037
+    },
+    {
+      "path": "docs/media/duel-orc.jpg",
+      "oid": "626a034ca21e54daf196bc3b682345f52c0c0d9b",
+      "bytes": 149043
+    },
+    {
+      "path": "docs/media/duel-orc.mp4",
+      "oid": "6132a455fdc14d2645535d15edfc4e9b3c3239dc",
+      "bytes": 26479955
+    },
+    {
+      "path": "docs/media/duel-undead.jpg",
+      "oid": "a78604fc6833de2f7aae7c3c7a2c97137ab77bef",
+      "bytes": 144629
+    },
+    {
+      "path": "docs/media/duel-undead.mp4",
+      "oid": "f59d5c376d9164d08a1ef1d1aa623feee0483704",
+      "bytes": 19504614
+    },
+    {
+      "path": "tests/fixtures/combat.w3g",
+      "oid": "ac65f5011110c24893b5c35173136a275db63a58",
+      "bytes": 3459
+    },
+    {
+      "path": "tests/fixtures/self_play.w3g",
+      "oid": "7ec98246d11024497d2a208bf1b381c10f87c9e9",
+      "bytes": 1366
+    }
+  ],
+  "forbidden_paths": [],
+  "secret_findings": [],
+  "limitation": "Rule-based review; not a proof that arbitrary secrets or personal information cannot exist.",
+  "commits": [
+    "85fcefdf1f9019dd92a40e109d544ec656d0d158",
+    "dc2ca7bd17d332b3b31355fe087c5cc1a5b340e1",
+    "2f7ddf1639fc038691ff0bd20403b11e5a97497d",
+    "e45a6ae3802a31866f74186ce0e669a58a7ea45f"
+  ],
+  "shallow": "false",
+  "obsolete_replays": [
+    {
+      "path": "tests/fixtures/combat.w3g",
+      "bytes": 3459,
+      "sha256": "9b971e6942175505e630d69fdd6b770c51c3fece69283047e50f0bec5db3ad5d",
+      "version": 29,
+      "build": 6060,
+      "same_as_upstream": true,
+      "port_127a_compatibility": "FAIL",
+      "reason": "Version 29 replay is rejected by replay_map version 27 gate",
+      "decision": "Omit obsolete fixture from proposed current tree; preserve historical object"
+    },
+    {
+      "path": "tests/fixtures/self_play.w3g",
+      "bytes": 1366,
+      "sha256": "8b8530716727d0583a00c3c5a569e5b0c21a07d6fcec79b1cca908f1d30190c6",
+      "version": 29,
+      "build": 6060,
+      "same_as_upstream": true,
+      "port_127a_compatibility": "FAIL",
+      "reason": "Version 29 replay is rejected by replay_map version 27 gate",
+      "decision": "Omit obsolete fixture from proposed current tree; preserve historical object"
+    }
+  ],
+  "github_existence_check": {
+    "utc": "2026-10-18T03:54:22.914746+00:00",
+    "command": [
+      "gh",
+      "api",
+      "repos/1850VV/wc3env-127a"
+    ],
+    "exit_code": 1,
+    "stdout": "{\"message\":\"Not Found\",\"documentation_url\":\"https://docs.github.com/rest/repos/repos#get-a-repository\",\"status\":\"404\"}",
+    "stderr": "gh: Not Found (HTTP 404)\n"
+  },
+  "proposed_current_tree": {
+    "files": 395,
+    "changes": {
+      "M": 3,
+      "D": 14,
+      "??": 13
+    },
+    "forbidden_paths": [],
+    "binary_files": [],
+    "secret_findings": [],
+    "all_current_json_parsed": true,
+    "independent_git": true,
+    "commit_count": 4,
+    "shallow": "false"
+  },
+  "protected_checkouts": [
+    {
+      "label": "wc3env-127a",
+      "files_checked": 400,
+      "status": "PASS",
+      "file_changes": [],
+      "metadata_changes": []
+    },
+    {
+      "label": "warcraftAgent",
+      "files_checked": 417,
+      "status": "PASS",
+      "file_changes": [],
+      "metadata_changes": []
+    },
+    {
+      "label": "warcraft-commander",
+      "files_checked": 85,
+      "status": "PASS",
+      "file_changes": [],
+      "metadata_changes": []
+    },
+    {
+      "label": "warcraft-commander-publish",
+      "files_checked": 130,
+      "status": "PASS",
+      "file_changes": [],
+      "metadata_changes": []
+    },
+    {
+      "label": "repo",
+      "files_checked": 133,
+      "status": "PASS",
+      "file_changes": [],
+      "metadata_changes": []
+    }
+  ],
+  "core_content_preservation": {
+    "files_checked": 304,
+    "differences": [
+      "src/wc3env/replay.py",
+      "tests/unit/test_kiting_policy.py",
+      "tests/unit/test_native_registration.py",
+      "tests/unit/test_port127_compare.py",
+      "tests/unit/test_port127_identity.py",
+      "tests/unit/test_reference_preparation.py",
+      "tests/unit/test_replay.py",
+      "tests/unit/test_surround_policy.py",
+      "wc3agent/src/wc3agent/game/data/maps/(2)EchoIsles.json",
+      "wc3agent/src/wc3agent/game/data/reference.json",
+      "wc3hook/build_probe127.bat",
+      "wc3hook/footprints_table.h",
+      "wc3hook/objects127.h"
+    ],
+    "status": "PASS",
+    "line_ending_only": [
+      "src/wc3env/replay.py",
+      "tests/unit/test_kiting_policy.py",
+      "tests/unit/test_native_registration.py",
+      "tests/unit/test_port127_compare.py",
+      "tests/unit/test_port127_identity.py",
+      "tests/unit/test_reference_preparation.py",
+      "tests/unit/test_replay.py",
+      "tests/unit/test_surround_policy.py",
+      "wc3agent/src/wc3agent/game/data/maps/(2)EchoIsles.json",
+      "wc3agent/src/wc3agent/game/data/reference.json",
+      "wc3hook/build_probe127.bat",
+      "wc3hook/footprints_table.h",
+      "wc3hook/objects127.h"
+    ],
+    "content_differences": []
+  },
+  "audit_phase": "Pre-filter preparation only. Historical binary inventory was removed under approved scheme B; see filtered-history-audit.json."
+}

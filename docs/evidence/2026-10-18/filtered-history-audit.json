@@ -1,0 +1,36 @@
+{
+  "scope": "All reachable history plus all objects physically stored in the new independent repository",
+  "refs": [
+    "4f2b66179fa766c9228b35990b815386d8edcf08 refs/heads/codex/127a-private-sync",
+    "4f2b66179fa766c9228b35990b815386d8edcf08 refs/heads/codex/archmage-kiting-mvp",
+    "bad0278a39ea1b1ea1233c230677f83f5ecd86a7 refs/heads/codex/wc3-127a"
+  ],
+  "commits": [
+    "4f2b66179fa766c9228b35990b815386d8edcf08",
+    "bad0278a39ea1b1ea1233c230677f83f5ecd86a7",
+    "b0e1858ee66b2d5f33b83f69f622aa97955293b5",
+    "68c5cf741137fe8491dd1ff0fe26e7645e6c598e"
+  ],
+  "blob_count": 411,
+  "text_bytes": 12724970,
+  "binary_blobs": [],
+  "forbidden_paths": [],
+  "secret_findings": [],
+  "rules": [
+    "github_token",
+    "provider_key",
+    "aws_access_id",
+    "private_key",
+    "credential_url"
+  ],
+  "limitation": "Rule-based secret scan, not a proof that arbitrary private information is absent",
+  "excluded_old_binary_objects_found": [],
+  "excluded_binary_object_count": 14,
+  "independent_object_database": true,
+  "status": "PASS",
+  "current_tree": {
+    "files": 399,
+    "findings": []
+  },
+  "scope_note": "Filtered four-commit baseline before publication commit; all 399 intended current-tree files reviewed separately"
+}

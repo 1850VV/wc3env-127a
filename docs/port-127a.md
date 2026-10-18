@@ -2,6 +2,8 @@
 
 本分支已把正式 `WC3Env`、`GameSession`、`PlayerView`、`StepPool` 后端迁移到本机 Warcraft III 1.27a。下列验收使用真实游戏进程，不把 mock、静态反汇编或接口返回成功当作游戏执行证据。
 
+功能清单、接口用法和 Python 示例见 [1.27a 功能说明](features-127a.md)。
+
 工作目录：`C:\Users\vvv\Documents\ChatGPT\wc3env-127a`，分支 `codex/wc3-127a`。
 原 `warcraftAgent` MVP、AMAI 地图和原游戏安装目录未修改。
 

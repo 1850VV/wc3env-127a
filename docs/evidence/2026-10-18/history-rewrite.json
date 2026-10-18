@@ -1,0 +1,105 @@
+{
+  "created_utc": "2026-10-18T04:03:54.759337+00:00",
+  "method": "git fast-export --full-tree with excluded paths, then fast-import into a new independent repository",
+  "excluded_pathspecs": [
+    "docs/media/**",
+    "tests/fixtures/*.w3g"
+  ],
+  "original_source_checkout": "C:\\Users\\vvv\\Documents\\ChatGPT\\wc3env-127a-publish",
+  "filtered_checkout": "C:\\Users\\vvv\\Documents\\ChatGPT\\wc3env-127a-private",
+  "initial_check": "Raw metadata equality failed because fast-export removed invalidated signatures; explicit signature handling then verified all retained metadata",
+  "commits": [
+    {
+      "original": "e45a6ae3802a31866f74186ce0e669a58a7ea45f",
+      "filtered": "68c5cf741137fe8491dd1ff0fe26e7645e6c598e",
+      "retained_paths": 352,
+      "removed_paths": [
+        "docs/media/blunder-base.jpg",
+        "docs/media/blunder-base.mp4",
+        "docs/media/blunder-towers.jpg",
+        "docs/media/blunder-towers.mp4",
+        "docs/media/duel-human.jpg",
+        "docs/media/duel-human.mp4",
+        "docs/media/duel-nightelf.jpg",
+        "docs/media/duel-nightelf.mp4",
+        "docs/media/duel-orc.jpg",
+        "docs/media/duel-orc.mp4",
+        "docs/media/duel-undead.jpg",
+        "docs/media/duel-undead.mp4",
+        "tests/fixtures/combat.w3g",
+        "tests/fixtures/self_play.w3g"
+      ],
+      "original_signature_removed": false,
+      "authors_dates_messages_parent_order_and_retained_blobs": "PASS"
+    },
+    {
+      "original": "2f7ddf1639fc038691ff0bd20403b11e5a97497d",
+      "filtered": "b0e1858ee66b2d5f33b83f69f622aa97955293b5",
+      "retained_paths": 352,
+      "removed_paths": [
+        "docs/media/blunder-base.jpg",
+        "docs/media/blunder-base.mp4",
+        "docs/media/blunder-towers.jpg",
+        "docs/media/blunder-towers.mp4",
+        "docs/media/duel-human.jpg",
+        "docs/media/duel-human.mp4",
+        "docs/media/duel-nightelf.jpg",
+        "docs/media/duel-nightelf.mp4",
+        "docs/media/duel-orc.jpg",
+        "docs/media/duel-orc.mp4",
+        "docs/media/duel-undead.jpg",
+        "docs/media/duel-undead.mp4",
+        "tests/fixtures/combat.w3g",
+        "tests/fixtures/self_play.w3g"
+      ],
+      "original_signature_removed": false,
+      "authors_dates_messages_parent_order_and_retained_blobs": "PASS"
+    },
+    {
+      "original": "dc2ca7bd17d332b3b31355fe087c5cc1a5b340e1",
+      "filtered": "bad0278a39ea1b1ea1233c230677f83f5ecd86a7",
+      "retained_paths": 369,
+      "removed_paths": [
+        "docs/media/blunder-base.jpg",
+        "docs/media/blunder-base.mp4",
+        "docs/media/blunder-towers.jpg",
+        "docs/media/blunder-towers.mp4",
+        "docs/media/duel-human.jpg",
+        "docs/media/duel-human.mp4",
+        "docs/media/duel-nightelf.jpg",
+        "docs/media/duel-nightelf.mp4",
+        "docs/media/duel-orc.jpg",
+        "docs/media/duel-orc.mp4",
+        "docs/media/duel-undead.jpg",
+        "docs/media/duel-undead.mp4",
+        "tests/fixtures/combat.w3g",
+        "tests/fixtures/self_play.w3g"
+      ],
+      "original_signature_removed": true,
+      "authors_dates_messages_parent_order_and_retained_blobs": "PASS"
+    },
+    {
+      "original": "85fcefdf1f9019dd92a40e109d544ec656d0d158",
+      "filtered": "4f2b66179fa766c9228b35990b815386d8edcf08",
+      "retained_paths": 382,
+      "removed_paths": [
+        "docs/media/blunder-base.jpg",
+        "docs/media/blunder-base.mp4",
+        "docs/media/blunder-towers.jpg",
+        "docs/media/blunder-towers.mp4",
+        "docs/media/duel-human.jpg",
+        "docs/media/duel-human.mp4",
+        "docs/media/duel-nightelf.jpg",
+        "docs/media/duel-nightelf.mp4",
+        "docs/media/duel-orc.jpg",
+        "docs/media/duel-orc.mp4",
+        "docs/media/duel-undead.jpg",
+        "docs/media/duel-undead.mp4",
+        "tests/fixtures/combat.w3g",
+        "tests/fixtures/self_play.w3g"
+      ],
+      "original_signature_removed": true,
+      "authors_dates_messages_parent_order_and_retained_blobs": "PASS"
+    }
+  ]
+}

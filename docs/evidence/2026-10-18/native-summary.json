@@ -1,0 +1,444 @@
+{
+  "kind": "Derived summary of prior native run; not a new native execution",
+  "date": "2026-10-18",
+  "source_commit": "85fcefdf1f9019dd92a40e109d544ec656d0d158",
+  "checks": {
+    "pause": {
+      "status": "PASS",
+      "wall_wait_seconds": 0.3,
+      "before": 1.0,
+      "after": 1.0
+    },
+    "move": {
+      "status": "PASS",
+      "distance": 409.9120035141692,
+      "before": {
+        "unit_id": 15027,
+        "x": -5487.0,
+        "y": 3257.75,
+        "hp": 220
+      },
+      "after": {
+        "unit_id": 15027,
+        "x": -5083.735,
+        "y": 3184.23,
+        "hp": 220,
+        "order": null
+      }
+    },
+    "attack": {
+      "status": "PASS",
+      "staging": "two debug-spawned Footmen; no debug damage",
+      "hp_before": 420,
+      "hp_trace": [
+        [
+          420,
+          420
+        ],
+        [
+          420,
+          420
+        ],
+        [
+          408,
+          409
+        ],
+        [
+          408,
+          409
+        ],
+        [
+          408,
+          409
+        ],
+        [
+          408,
+          409
+        ],
+        [
+          408,
+          409
+        ],
+        [
+          408,
+          409
+        ],
+        [
+          398,
+          398
+        ],
+        [
+          398,
+          399
+        ],
+        [
+          398,
+          399
+        ],
+        [
+          398,
+          399
+        ],
+        [
+          398,
+          399
+        ],
+        [
+          387,
+          387
+        ],
+        [
+          387,
+          387
+        ],
+        [
+          387,
+          387
+        ],
+        [
+          387,
+          387
+        ],
+        [
+          387,
+          387
+        ],
+        [
+          387,
+          387
+        ],
+        [
+          377,
+          377
+        ],
+        [
+          377,
+          377
+        ],
+        [
+          377,
+          377
+        ],
+        [
+          377,
+          377
+        ],
+        [
+          377,
+          377
+        ],
+        [
+          366,
+          366
+        ],
+        [
+          366,
+          366
+        ],
+        [
+          367,
+          366
+        ],
+        [
+          367,
+          366
+        ],
+        [
+          367,
+          366
+        ],
+        [
+          356,
+          355
+        ],
+        [
+          356,
+          355
+        ],
+        [
+          356,
+          355
+        ]
+      ],
+      "events": [
+        {
+          "kind": "attacked",
+          "unit_id": 14790,
+          "attacker_id": 14789
+        },
+        {
+          "kind": "attacked",
+          "unit_id": 14789,
+          "attacker_id": 14790
+        },
+        {
+          "kind": "attacked",
+          "unit_id": 14790,
+          "attacker_id": 14789
+        },
+        {
+          "kind": "attacked",
+          "unit_id": 14789,
+          "attacker_id": 14790
+        },
+        {
+          "kind": "attacked",
+          "unit_id": 14790,
+          "attacker_id": 14789
+        },
+        {
+          "kind": "attacked",
+          "unit_id": 14789,
+          "attacker_id": 14790
+        },
+        {
+          "kind": "attacked",
+          "unit_id": 14790,
+          "attacker_id": 14789
+        },
+        {
+          "kind": "attacked",
+          "unit_id": 14789,
+          "attacker_id": 14790
+        },
+        {
+          "kind": "attacked",
+          "unit_id": 14790,
+          "attacker_id": 14789
+        },
+        {
+          "kind": "attacked",
+          "unit_id": 14789,
+          "attacker_id": 14790
+        },
+        {
+          "kind": "attacked",
+          "unit_id": 14790,
+          "attacker_id": 14789
+        },
+        {
+          "kind": "attacked",
+          "unit_id": 14789,
+          "attacker_id": 14790
+        }
+      ]
+    },
+    "acceleration": {
+      "status": "PASS",
+      "samples": [
+        {
+          "factor": 1,
+          "wall_seconds": 0.2609609999926761,
+          "simulated_seconds": 1.0
+        },
+        {
+          "factor": 64,
+          "wall_seconds": 0.11416850000387058,
+          "simulated_seconds": 1.0
+        }
+      ]
+    },
+    "reset": {
+      "status": "PASS",
+      "before_pid": 12896,
+      "after_pid": 12896,
+      "time": 1.0,
+      "player": {
+        "gold": 500,
+        "lumber": 150,
+        "food_used": 5,
+        "food_cap": 12
+      },
+      "types": [
+        "hpea",
+        "hpea",
+        "hpea",
+        "hpea",
+        "hpea",
+        "htow"
+      ]
+    },
+    "determinism": {
+      "status": "PASS",
+      "test": "tests.e2e.test_match_setup.MatchSetupTest.test_seed_repeats_races_positions_and_combat_after_reset",
+      "scope": "3 seeded combat traces, 32 samples each, same process then replacement; not arbitrary full matches"
+    },
+    "connect": {
+      "status": "PASS",
+      "game_version": "1.27.0.52240",
+      "exe_sha256": "ea8f5192efede23f84bc60140c2d4a0085ea68b86f430c1d60c354a555922def",
+      "dll_version": "0.8",
+      "mode": "stepping"
+    },
+    "observations": {
+      "status": "PASS",
+      "player": {
+        "gold": 500,
+        "lumber": 150,
+        "food_used": 5,
+        "food_cap": 12
+      },
+      "units": [
+        {
+          "unit_id": 15027,
+          "type_id": "hpea",
+          "owner": 0,
+          "x": -5487.0,
+          "y": 3257.75,
+          "hp": 220,
+          "max_hp": 220,
+          "structure": false
+        },
+        {
+          "unit_id": 15005,
+          "type_id": "hpea",
+          "owner": 0,
+          "x": -5410.25,
+          "y": 3257.75,
+          "hp": 220,
+          "max_hp": 220,
+          "structure": false
+        },
+        {
+          "unit_id": 14983,
+          "type_id": "hpea",
+          "owner": 0,
+          "x": -5512.5,
+          "y": 3331.25,
+          "hp": 220,
+          "max_hp": 220,
+          "structure": false
+        },
+        {
+          "unit_id": 14961,
+          "type_id": "hpea",
+          "owner": 0,
+          "x": -5384.5,
+          "y": 3331.25,
+          "hp": 220,
+          "max_hp": 220,
+          "structure": false
+        },
+        {
+          "unit_id": 14939,
+          "type_id": "hpea",
+          "owner": 0,
+          "x": -5448.5,
+          "y": 3385.75,
+          "hp": 220,
+          "max_hp": 220,
+          "structure": false
+        },
+        {
+          "unit_id": 14908,
+          "type_id": "htow",
+          "owner": 0,
+          "x": -5184.0,
+          "y": 2944.0,
+          "hp": 1500,
+          "max_hp": 1500,
+          "structure": true
+        }
+      ]
+    },
+    "build": {
+      "status": "PASS",
+      "before": {
+        "gold": 500,
+        "lumber": 150,
+        "food_used": 5,
+        "food_cap": 12
+      },
+      "after": {
+        "gold": 420,
+        "lumber": 130,
+        "food_used": 5,
+        "food_cap": 18
+      },
+      "events": [
+        {
+          "kind": "construct_start",
+          "unit_id": 14810,
+          "type_id": "hhou"
+        },
+        {
+          "kind": "construct_finish",
+          "unit_id": 14810,
+          "type_id": "hhou"
+        }
+      ],
+      "farm": {
+        "unit_id": 14810,
+        "type_id": "hhou",
+        "x": -5184.0,
+        "y": 2304.0,
+        "hp": 500,
+        "max_hp": 500,
+        "state": null
+      }
+    },
+    "step": {
+      "status": "PASS",
+      "before": 1.0,
+      "after": 1.025,
+      "info": {
+        "rejected": {
+          "0": [],
+          "1": []
+        },
+        "steps": 1,
+        "elapsed_ms": 25,
+        "step_reason": "target"
+      }
+    },
+    "two_instances": {
+      "status": "PASS",
+      "pids": [
+        29504,
+        15200
+      ],
+      "initial_times": [
+        1.0,
+        1.0
+      ],
+      "isolated_times": [
+        1.25,
+        1.0
+      ],
+      "final_times": [
+        2.25,
+        2.0
+      ],
+      "independent_directories": true
+    }
+  },
+  "trace_sha256": "60ec939707b0a2fd7285b52335e05a35ba377ec36af3466dda05eaf9e80430f9",
+  "wall_seconds": 25.88645419999375,
+  "first_attempt": {
+    "checks": {
+      "connect": "PASS",
+      "observations": "PASS",
+      "pause": "PASS",
+      "step": "PASS",
+      "move": "PASS",
+      "build": "PASS",
+      "attack": "PASS",
+      "acceleration": "PASS",
+      "reset": "PASS",
+      "exception": "FAIL",
+      "determinism": "NOT RUN",
+      "two_instances": "NOT RUN"
+    },
+    "exception": {
+      "status": "FAIL",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\vvv\\Documents\\ChatGPT\\wc3env-127a\\tools\\validate_127a_native.py\", line 228, in main\n    from tests.e2e.test_match_setup import MatchSetupTest\nModuleNotFoundError: No module named 'tests'\n"
+    }
+  },
+  "limits": [
+    "No full training or stress run",
+    "Attack fixture used two debug-spawned Footmen; no debug damage",
+    "Fixed-seed determinism is scoped to the recorded fixture",
+    "Not VectorSession",
+    "Original raw logs remain local; hashes identify but do not replace their contents"
+  ]
+}

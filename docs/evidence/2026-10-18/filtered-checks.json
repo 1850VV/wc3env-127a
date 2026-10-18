@@ -1,0 +1,100 @@
+{
+  "scope": "New filtered publication checkout, offline/build only",
+  "checks": [
+    {
+      "argv": [
+        "<existing-venv-python>",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "wc3agent/tests"
+      ],
+      "cwd": "<filtered-publication-checkout>",
+      "started_utc": "2026-10-18T04:06:37.276071+00:00",
+      "exit_code": 0,
+      "wall_seconds": 0.975,
+      "log": "<filtered-publication-checkout>\\runs\\private-publish-B-20261018\\agent-unit.log",
+      "label": "agent-unit",
+      "log_sha256": "294e880bdbc261d390166c83984f21a00bf26bb04de877fa9de0811dd927c12f",
+      "tests_run": 156,
+      "summary": "OK"
+    },
+    {
+      "argv": [
+        "<existing-venv-python>",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/unit",
+        "-t",
+        "."
+      ],
+      "cwd": "<filtered-publication-checkout>",
+      "started_utc": "2026-10-18T04:06:35.938023+00:00",
+      "exit_code": 0,
+      "wall_seconds": 1.337,
+      "log": "<filtered-publication-checkout>\\runs\\private-publish-B-20261018\\host-unit.log",
+      "label": "host-unit",
+      "log_sha256": "1e47ed848aa5678abf7057fea981daa83688e6ac752aadfc6769aaad20079b0c",
+      "tests_run": 116,
+      "summary": "OK"
+    },
+    {
+      "argv": [
+        "cmd.exe",
+        "/d",
+        "/c",
+        "<filtered-publication-checkout>\\runs\\private-publish-B-20261018\\build-source\\wc3hook\\build.bat"
+      ],
+      "cwd": "<filtered-publication-checkout>\\runs\\private-publish-B-20261018\\build-source",
+      "started_utc": "2026-10-18T04:05:30.226830+00:00",
+      "exit_code": 0,
+      "wall_seconds": 16.559,
+      "log": "<filtered-publication-checkout>\\runs\\private-publish-B-20261018\\native-build.log",
+      "label": "native-build",
+      "log_sha256": "a6e749c5b1bc22a5189178b3586b6fd40d4ea79e8560a30ad70e62c4f0ac6952"
+    },
+    {
+      "argv": [
+        "<existing-venv-python>",
+        "-m",
+        "ruff",
+        "check",
+        "."
+      ],
+      "cwd": "<filtered-publication-checkout>",
+      "started_utc": "2026-10-18T04:06:38.252854+00:00",
+      "exit_code": 0,
+      "wall_seconds": 0.095,
+      "log": "<filtered-publication-checkout>\\runs\\private-publish-B-20261018\\ruff-check.log",
+      "label": "ruff-check",
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "argv": [
+        "<existing-venv-python>",
+        "-m",
+        "ruff",
+        "format",
+        "--check",
+        "."
+      ],
+      "cwd": "<filtered-publication-checkout>",
+      "started_utc": "2026-10-18T04:06:38.348103+00:00",
+      "exit_code": 0,
+      "wall_seconds": 0.103,
+      "log": "<filtered-publication-checkout>\\runs\\private-publish-B-20261018\\ruff-format-check.log",
+      "label": "ruff-format-check",
+      "log_sha256": "c90f684ccee760f54bc3d79f420f5faafb24e12a103e375749fa94089852e5e6"
+    }
+  ],
+  "environment": {
+    "PYTHONPATH": "<filtered-publication-checkout>/src;<filtered-publication-checkout>/wc3agent/src",
+    "WC3_GAME_DIR": "Existing licensed 1.27a install, process environment only; no config file copied"
+  },
+  "native_game_execution": "NOT RUN",
+  "training": "NOT RUN",
+  "local_clean_wheel_install": "NOT RUN"
+}

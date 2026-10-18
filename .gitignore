@@ -29,3 +29,40 @@ wc3hook/out/
 tests/e2e/out/
 tests/e2e/extended/out/
 tests/e2e/out_*.log
+
+# Local publication review, credentials, caches and machine configuration.
+.local/
+.env.*
+!.env.example
+.ruff_cache/
+.pytest_cache/
+.cache/
+node_modules/
+*.pem
+*.key
+*.pfx
+*.p12
+auth.json
+credentials*.json
+
+# Do not distribute Warcraft installation files, maps or extracted assets.
+*.exe
+*.dll
+*.mpq
+*.w3x
+*.w3m
+*.blp
+*.mdx
+*.mdl
+*.dds
+*.tga
+*.pdb
+*.obj
+*.lib
+*.exp
+*.whl
+*.zip
+
+# Upstream demo media is omitted from the new tree; original commits retain it.
+docs/media/
+*.w3g

@@ -1,0 +1,185 @@
+{
+  "kind": "Offline/build runs in independent publication checkout",
+  "checks": [
+    {
+      "argv": [
+        "<existing-venv-python>",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "wc3agent/tests"
+      ],
+      "cwd": "<publication-checkout>",
+      "started_utc": "2026-10-18T03:53:00.508160+00:00",
+      "exit_code": 0,
+      "wall_seconds": 1.15,
+      "log": "<publication-checkout>\\runs\\private-sync-20261018\\agent-unit.log",
+      "label": "agent-unit",
+      "log_sha256": "e56b58aba2a69a4de544d63aaca05ca5cdc73a6bac94130fa7cb3b6fa6c186e3"
+    },
+    {
+      "argv": [
+        "<existing-venv-python>",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/unit",
+        "-t",
+        "."
+      ],
+      "cwd": "<publication-checkout>",
+      "started_utc": "2026-10-18T03:53:42.409391+00:00",
+      "exit_code": 1,
+      "wall_seconds": 1.253,
+      "log": "<publication-checkout>\\runs\\private-sync-20261018\\host-unit-after-build.log",
+      "label": "host-unit-after-build",
+      "log_sha256": "687ccf42b710d3748f07a91a9d27033a1f801af38f0ce1e57105438fcbf2e991"
+    },
+    {
+      "argv": [
+        "<existing-venv-python>",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/unit",
+        "-t",
+        "."
+      ],
+      "cwd": "<publication-checkout>",
+      "started_utc": "2026-10-18T03:53:51.629618+00:00",
+      "exit_code": 0,
+      "wall_seconds": 1.264,
+      "log": "<publication-checkout>\\runs\\private-sync-20261018\\host-unit-with-local-hook.log",
+      "label": "host-unit-with-local-hook",
+      "log_sha256": "01c2a588ce417583c9fb3d61101220c697695d72a8c35ed9ac0fbe7f8b32b322"
+    },
+    {
+      "argv": [
+        "<existing-venv-python>",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/unit",
+        "-t",
+        "."
+      ],
+      "cwd": "<publication-checkout>",
+      "started_utc": "2026-10-18T03:52:58.772276+00:00",
+      "exit_code": 1,
+      "wall_seconds": 1.735,
+      "log": "<publication-checkout>\\runs\\private-sync-20261018\\host-unit.log",
+      "label": "host-unit",
+      "log_sha256": "d2be6a9cc6d54ca40581b1d3c086db27d7869c5cd936549a1b4007d69e1c05c3"
+    },
+    {
+      "argv": [
+        "cmd.exe",
+        "/d",
+        "/c",
+        "<publication-checkout>\\runs\\private-sync-20261018\\build-source\\wc3hook\\build.bat"
+      ],
+      "cwd": "<publication-checkout>\\runs\\private-sync-20261018\\build-source",
+      "started_utc": "2026-10-18T03:53:13.297732+00:00",
+      "exit_code": 0,
+      "wall_seconds": 17.48,
+      "log": "<publication-checkout>\\runs\\private-sync-20261018\\native-build.log",
+      "label": "native-build",
+      "log_sha256": "a6e749c5b1bc22a5189178b3586b6fd40d4ea79e8560a30ad70e62c4f0ac6952"
+    },
+    {
+      "argv": [
+        "<existing-venv-python>",
+        "-m",
+        "ruff",
+        "check",
+        "."
+      ],
+      "cwd": "<publication-checkout>",
+      "started_utc": "2026-10-18T03:53:01.658431+00:00",
+      "exit_code": 0,
+      "wall_seconds": 0.129,
+      "log": "<publication-checkout>\\runs\\private-sync-20261018\\ruff-check.log",
+      "label": "ruff-check",
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "argv": [
+        "<existing-venv-python>",
+        "-m",
+        "ruff",
+        "format",
+        "--check",
+        "."
+      ],
+      "cwd": "<publication-checkout>",
+      "started_utc": "2026-10-18T03:53:01.788172+00:00",
+      "exit_code": 0,
+      "wall_seconds": 0.112,
+      "log": "<publication-checkout>\\runs\\private-sync-20261018\\ruff-format-check.log",
+      "label": "ruff-format-check",
+      "log_sha256": "28616f479dcc341db5ca0e9b2e4e2cf2bb23f4ebb35f5645b22473a745a92f14"
+    },
+    {
+      "argv": [
+        "<existing-venv-python>",
+        "-m",
+        "unittest",
+        "tests.unit.test_scenario_steps"
+      ],
+      "cwd": "<publication-checkout>",
+      "started_utc": "2026-10-18T03:58:47.117716+00:00",
+      "exit_code": 0,
+      "wall_seconds": 0.139,
+      "log": "<publication-checkout>\\runs\\private-sync-20261018\\host-scenario-unit.log",
+      "label": "host-scenario-unit",
+      "log_sha256": "8ee4669655aaed29bbc70e28a8ef25f73d1ebe2b002448e637699b5a2cbcaa41",
+      "environment_overrides": {
+        "WC3_GAME_DIR": "<existing-licensed-1.27a-install>"
+      }
+    }
+  ],
+  "host_result": "PASS: 113 tests in discovery, then 3 scenario unit tests that had been skipped at module import. 116 test methods covered; no games launched.",
+  "initial_failures": "Both first host runs failed with 2 FileNotFoundError errors: mock settings bypass WC3_HOOK_DLL; packaged DLL did not yet exist",
+  "agent_result": "PASS: 156 tests",
+  "native_game_execution_during_preparation": "NOT RUN",
+  "wheel_installation_during_preparation": "NOT RUN",
+  "final_git_checks": [
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "warning: in the working copy of 'docs/port-127a.md', LF will be replaced by CRLF the next time Git touches it\n"
+    },
+    {
+      "argv": [
+        "git",
+        "fsck",
+        "--full",
+        "--no-reflogs"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--cached",
+        "--quiet"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "new_document_links": "PASS"
+}

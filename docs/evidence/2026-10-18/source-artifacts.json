@@ -1,0 +1,85 @@
+{
+  "root_label": "Original local recovery-20261018-01 output; not included in Git",
+  "artifacts": [
+    {
+      "artifact": "native-r2/result.json",
+      "bytes": 21947,
+      "sha256": "c9154a5501d0c8fc574ce74b07dae83b2141a070f32ec4a99e074252b8fc8b93"
+    },
+    {
+      "artifact": "native-r2/trace.jsonl",
+      "bytes": 2964522,
+      "sha256": "60ec939707b0a2fd7285b52335e05a35ba377ec36af3466dda05eaf9e80430f9"
+    },
+    {
+      "artifact": "native/result.json",
+      "bytes": 19733,
+      "sha256": "153acdedab5d602ece91e4e7d2122aeb0db6e4555ecaee50d06f95bbc73c9ea7"
+    },
+    {
+      "artifact": "native/trace.jsonl",
+      "bytes": 2900481,
+      "sha256": "c5223527395607e7153b634ad488f42d0c39e57ca3b2d08467865d05680b49f7"
+    },
+    {
+      "artifact": "host-unit.log",
+      "bytes": 221,
+      "sha256": "7c207a33245565f1904c0352629f52afc51bb6393a1fff265adf647614ce9e1a"
+    },
+    {
+      "artifact": "agent-unit.log",
+      "bytes": 1199,
+      "sha256": "75aaad204ba1a396265937a155a1889a7d34a8230caeaf57bfeff828b0413580"
+    },
+    {
+      "artifact": "native-build.log",
+      "bytes": 532,
+      "sha256": "a6e749c5b1bc22a5189178b3586b6fd40d4ea79e8560a30ad70e62c4f0ac6952"
+    },
+    {
+      "artifact": "native-minimal.log",
+      "bytes": 9820,
+      "sha256": "aa6019b44b39022af0e6b62ff53b3e4bb82b1dc876fcfe70ed7f5e2fc2cc561c"
+    },
+    {
+      "artifact": "native-minimal-r2.log",
+      "bytes": 11078,
+      "sha256": "cfe66c10d6d591a1d5c4e57f6b451047049feba798cd4035d067ef7f92407008"
+    },
+    {
+      "artifact": "lint-final.log",
+      "bytes": 19,
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "artifact": "format-final.log",
+      "bytes": 28,
+      "sha256": "82d11debb2402ed51f854503a78bcf145a3f850bb5ab8b9bb5a00ffdbdbaa513"
+    },
+    {
+      "artifact": "preservation.json",
+      "bytes": 174,
+      "sha256": "0c0de9f28788c434ab2b3c6aa69c1fbcc9e8b56bc63268130393d25145494051"
+    },
+    {
+      "artifact": "environment.json",
+      "bytes": 890,
+      "sha256": "b34dfd022cd01e9cc7015be0b4d04264bda5658bff696b0df7e25fbc2703aa61"
+    },
+    {
+      "artifact": "native-minimal.command.json",
+      "bytes": 488,
+      "sha256": "1de8a4942b81fed26eec1f67c07aab64b7d71029009c325ad29da84c05d23921"
+    },
+    {
+      "artifact": "native-minimal-r2.command.json",
+      "bytes": 494,
+      "sha256": "1a2cac9cac7bc11b00159852d2b9bae9daaa73ad01f9a517301ca4c6c9e138ac"
+    },
+    {
+      "artifact": "native-build.command.json",
+      "bytes": 487,
+      "sha256": "077dc3a45dc09c950eefdf7d1e9ac6e290f57ef61dd77a3fcb06dbbe7fc0a1b6"
+    }
+  ]
+}
