@@ -24,6 +24,12 @@ DLL replies also include `timing_ms` outside `result`; see [profiling](#step-pro
 States: `launched` (awaiting configuration), `in_game` (running), `ended` (results or replay EOF;
 final observations readable).
 
+Menu launch: started without `WC3HOOK_MAP` (and usually without `-loadfile`), the player picks a map in
+Warcraft's own menus. The hook still holds the first game at 1000 ms. `info` then reports `map` as the
+last `.w3x`/`.w3m` the game opened before that hold, `menu_launch: true` and `held`; `create_game`
+accepts `map: "*"` and `players: "loaded"` (every playing slot 0..11: a local user becomes an agent, a
+computer stays computer). Agent slots must still match `WC3HOOK_AGENTS`. One game per process.
+
 | Method | Params | Valid states | Result |
 |--------|--------|--------------|--------|
 | `info` | | Any | `exe_hash` (SHA-256), `game_version`, `dll_version`, `mode` (stepping/realtime/null), `game_time_ms`, `instance` (pid), `map` |
