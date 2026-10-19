@@ -176,7 +176,7 @@ static int map_matches(const char *requested) {
     const char *base = strrchr(g_map, '\\');
     base = base ? base + 1 : g_map;
     if (g_menu_launch && strcmp(requested, "*") == 0)
-        return g_map[0] != 0;
+        return 1; /* the map may be unknown (hook loaded after it was opened); info then reports "" */
     return g_map[0] && (_stricmp(path, g_map) == 0 || (!strchr(path, '\\') && _stricmp(path, base) == 0));
 }
 typedef struct {
