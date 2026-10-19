@@ -83,6 +83,12 @@ static DWORD WINAPI main_thread(LPVOID arg) {
     SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
     {
         require_hook(MH_Initialize(), "MinHook initialization");
+        if (GetModuleHandleW(L"Game.dll")) {
+            /* Injected into a game that was already running (not launched suspended): nobody passed
+             * settings, so keep the player's normal window instead of the background default. */
+            SetEnvironmentVariableA("WC3HOOK_WINDOW_MODE", "interactive");
+            hook_log("late attach: the game was already running");
+        }
         rpc_init();
         if (!LoadLibraryW(L"shell32.dll") || !LoadLibraryW(L"Mss32.dll"))
             ExitProcess(1);
@@ -113,6 +119,11 @@ static DWORD WINAPI main_thread(LPVOID arg) {
 
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {
     if (reason == DLL_PROCESS_ATTACH) {
+        /* One hook per process: a controller may inject into a game that was launched with one. */
+        char once[64];
+        _snprintf(once, sizeof once, "wc3hook-loaded-%lu", GetCurrentProcessId());
+        if (CreateMutexA(NULL, FALSE, once) && GetLastError() == ERROR_ALREADY_EXISTS)
+            return FALSE;
         DisableThreadLibraryCalls(inst);
         g_base = (BYTE *)GetModuleHandleA(NULL);
         GetModuleFileNameA(inst, g_dir, MAX_PATH);

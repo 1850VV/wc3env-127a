@@ -14,8 +14,30 @@ volatile LONG g_status = ST_LAUNCHED;
 static int g_mode;               /* 0 none, 1 stepping, 2 realtime */
 static int g_obs_seq[16];        /* observe sequence per player */
 static char g_map[4 * MAX_PATH]; /* UTF-8 path passed to -loadfile by the launcher */
+/* Menu launch: no WC3HOOK_MAP, the player picks a map in Warcraft's own menus. g_map is then the
+ * last map file the game opened before its first frame, and create_game accepts map "*" and
+ * players "loaded" (the slots the lobby filled), so a game started by hand can be taken over. */
+static int g_menu_launch;
 static char g_exe_hash[65];
 static LONGLONG g_request_work_ticks;
+
+int rpc_menu_launch(void) {
+    return g_menu_launch;
+}
+/* Menu launch: the player left a game and started another one from the menus in the same process.
+ * Forget the old game as a reset would, without asking Warcraft to reload anything. */
+void rpc_new_game(void) {
+    players_clear();
+    act_clear();
+    events_set_players(0);
+    results_clear();
+    stage_clear();
+    metadata_clear();
+    setup_clear();
+    g_status = ST_LAUNCHED;
+    g_mode = 0;
+    memset(g_obs_seq, 0, sizeof g_obs_seq);
+}
 
 void rpc_set_ended(void) {
     if (g_status == ST_IN_GAME)
@@ -147,6 +169,10 @@ static void m_info(JW *w, LONGLONG id) {
     jw_uint(w, GetCurrentProcessId());
     jw_key(w, "map");
     jw_string(w, g_map);
+    jw_key(w, "menu_launch");
+    jw_bool(w, g_menu_launch);
+    jw_key(w, "held");
+    jw_bool(w, g_held != 0);
     setup_write(w);
     jw_close(w, '}');
     jw_close(w, '}');
@@ -167,10 +193,13 @@ static int map_matches(const char *requested) {
             *p = '\\';
     const char *base = strrchr(g_map, '\\');
     base = base ? base + 1 : g_map;
+    if (g_menu_launch && strcmp(requested, "*") == 0)
+        return 1; /* the map may be unknown (hook loaded after it was opened); info then reports "" */
     return g_map[0] && (_stricmp(path, g_map) == 0 || (!strchr(path, '\\') && _stricmp(path, base) == 0));
 }
 typedef struct {
     int mode;
+    int loaded; /* fill players from the lobby the game was started with (menu launch) */
     unsigned players;
     int races[16], controls[16];
     char error[160];
@@ -270,6 +299,16 @@ static void create_job(void *a) {
         return;
     }
     unsigned agents = 0;
+    if (j->loaded) /* playing slots of the started game: a local user is the agent, computers stay */
+        for (int p = 0; p < 12; p++) {
+            int handle = NATIVE(RVA_N_PLAYER, NativeI_I)(p);
+            int control = NATIVE(RVA_N_PLAYERCONTROL, NativeI_I)(handle);
+            if (NATIVE(RVA_N_PLAYERSLOTSTATE, NativeI_I)(handle) != 1 || (control != 0 && control != 1))
+                continue;
+            j->players |= 1u << p;
+            j->races[p] = -1;
+            j->controls[p] = control;
+        }
     for (int p = 0; p < 16; p++) {
         if (!(j->players & (1u << p)))
             continue;
@@ -318,16 +357,20 @@ static void m_create_game(JW *w, LONGLONG id, yyjson_val *params) {
         return;
     }
     yyjson_val *players = yyjson_obj_get(params, "players");
-    if (players == NULL || !yyjson_is_arr(players)) {
+    CreateJob j = {0};
+    char loaded[16];
+    if (g_menu_launch && players && jr_str(players, loaded, sizeof loaded) && strcmp(loaded, "loaded") == 0) {
+        j.loaded = 1;
+        players = NULL;
+    } else if (players == NULL || !yyjson_is_arr(players)) {
         reply_error(w, id, "bad_params", "players must be a list");
         return;
     }
-    if (!(int)yyjson_arr_size(players)) {
+    if (players && !(int)yyjson_arr_size(players)) {
         reply_error(w, id, "bad_params", "players must not be empty");
         return;
     }
-    CreateJob j = {0};
-    for (int k = 0; k < (int)yyjson_arr_size(players); k++) {
+    for (int k = 0; players && k < (int)yyjson_arr_size(players); k++) {
         yyjson_val *pl = yyjson_arr_get(players, k);
         LONGLONG slot;
         char race[32], control[32];
@@ -785,11 +828,47 @@ void rpc_handle(const char *line) {
     }
 }
 
+/* Menu launch: remember the last .w3x/.w3m the game opens until its first frame holds it. The
+ * menus open every listed map for its preview; loading the chosen game opens that map last. */
+static HANDLE(WINAPI *CreateFileA_orig)(LPCSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
+static HANDLE(WINAPI *CreateFileW_orig)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
+static void note_map(const wchar_t *path) {
+    size_t n = wcslen(path);
+    if (n < 4 || (_wcsicmp(path + n - 4, L".w3x") && _wcsicmp(path + n - 4, L".w3m")))
+        return;
+    char utf8[sizeof g_map];
+    if (WideCharToMultiByte(CP_UTF8, 0, path, -1, utf8, sizeof utf8, NULL, NULL) > 0)
+        memcpy(g_map, utf8, sizeof g_map);
+}
+static HANDLE WINAPI CreateFileA_hook(LPCSTR name, DWORD access, DWORD share, LPSECURITY_ATTRIBUTES sa, DWORD disp,
+                                      DWORD flags, HANDLE tmpl) {
+    HANDLE h = CreateFileA_orig(name, access, share, sa, disp, flags, tmpl);
+    wchar_t wide[MAX_PATH];
+    if (h != INVALID_HANDLE_VALUE && name && MultiByteToWideChar(CP_ACP, 0, name, -1, wide, MAX_PATH) > 0)
+        note_map(wide);
+    return h;
+}
+static HANDLE WINAPI CreateFileW_hook(LPCWSTR name, DWORD access, DWORD share, LPSECURITY_ATTRIBUTES sa, DWORD disp,
+                                      DWORD flags, HANDLE tmpl) {
+    HANDLE h = CreateFileW_orig(name, access, share, sa, disp, flags, tmpl);
+    if (h != INVALID_HANDLE_VALUE && name)
+        note_map(name);
+    return h;
+}
+
 void rpc_init(void) {
     wchar_t map[MAX_PATH];
     DWORD n = GetEnvironmentVariableW(L"WC3HOOK_MAP", map, MAX_PATH);
     if (n && n < MAX_PATH)
         WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, map, -1, g_map, sizeof g_map, NULL, NULL);
+    else {
+        g_menu_launch = 1;
+        require_hook(MH_CreateHookApi(L"kernel32", "CreateFileA", (void *)CreateFileA_hook, (void **)&CreateFileA_orig),
+                     "CreateFileA");
+        require_hook(MH_CreateHookApi(L"kernel32", "CreateFileW", (void *)CreateFileW_hook, (void **)&CreateFileW_orig),
+                     "CreateFileW");
+        hook_log("menu launch: the player chooses the map");
+    }
     GetEnvironmentVariableA("WC3HOOK_EXE_HASH", g_exe_hash, sizeof g_exe_hash);
     InitializeCriticalSection(&g_job_lock);
     g_job_done = CreateEventA(NULL, TRUE, FALSE, NULL);
