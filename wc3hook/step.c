@@ -102,6 +102,9 @@ static int g_holding;
 static int g_end_requested;
 static int g_restarting;
 
+int rpc_menu_launch(void);
+void rpc_new_game(void);
+
 void step_restart(void) {
     step_mode(0);
     g_held = g_holding = g_end_requested = 0;
@@ -158,6 +161,22 @@ int __fastcall GameUpdate_hook(void *self, void *edx, DWORD now) {
     if (g_restarting) {
         g_game = NULL;
         return GameUpdate_orig(self, edx, now);
+    }
+    {
+        /* Menu launch: game time going back means a new game from the menus in this process. Release
+         * the old one so the hold below catches the new game for the next create_game. */
+        static DWORD last_gt;
+        DWORD gt = *(DWORD *)(t + GAME_TIME_MS);
+        if (rpc_menu_launch() && g_held && gt < last_gt) {
+            hook_log("menu: new game (gametime %lu after %lu)", gt, last_gt);
+            if (g_stepmode)
+                step_mode(0);
+            InterlockedExchange(&g_stepping, 0);
+            rpc_new_game();
+            g_held = g_holding = g_end_requested = 0;
+            g_produce_target = 0;
+        }
+        last_gt = gt;
     }
     if (g_status == ST_ENDED && g_stepmode && !g_stepping)
         return 0;

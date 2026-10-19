@@ -21,6 +21,24 @@ static int g_menu_launch;
 static char g_exe_hash[65];
 static LONGLONG g_request_work_ticks;
 
+int rpc_menu_launch(void) {
+    return g_menu_launch;
+}
+/* Menu launch: the player left a game and started another one from the menus in the same process.
+ * Forget the old game as a reset would, without asking Warcraft to reload anything. */
+void rpc_new_game(void) {
+    players_clear();
+    act_clear();
+    events_set_players(0);
+    results_clear();
+    stage_clear();
+    metadata_clear();
+    setup_clear();
+    g_status = ST_LAUNCHED;
+    g_mode = 0;
+    memset(g_obs_seq, 0, sizeof g_obs_seq);
+}
+
 void rpc_set_ended(void) {
     if (g_status == ST_IN_GAME)
         g_status = ST_ENDED;
@@ -816,7 +834,7 @@ static HANDLE(WINAPI *CreateFileA_orig)(LPCSTR, DWORD, DWORD, LPSECURITY_ATTRIBU
 static HANDLE(WINAPI *CreateFileW_orig)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
 static void note_map(const wchar_t *path) {
     size_t n = wcslen(path);
-    if (g_held || g_status != ST_LAUNCHED || n < 4 || (_wcsicmp(path + n - 4, L".w3x") && _wcsicmp(path + n - 4, L".w3m")))
+    if (n < 4 || (_wcsicmp(path + n - 4, L".w3x") && _wcsicmp(path + n - 4, L".w3m")))
         return;
     char utf8[sizeof g_map];
     if (WideCharToMultiByte(CP_UTF8, 0, path, -1, utf8, sizeof utf8, NULL, NULL) > 0)

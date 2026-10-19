@@ -119,6 +119,11 @@ static DWORD WINAPI main_thread(LPVOID arg) {
 
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {
     if (reason == DLL_PROCESS_ATTACH) {
+        /* One hook per process: a controller may inject into a game that was launched with one. */
+        char once[64];
+        _snprintf(once, sizeof once, "wc3hook-loaded-%lu", GetCurrentProcessId());
+        if (CreateMutexA(NULL, FALSE, once) && GetLastError() == ERROR_ALREADY_EXISTS)
+            return FALSE;
         DisableThreadLibraryCalls(inst);
         g_base = (BYTE *)GetModuleHandleA(NULL);
         GetModuleFileNameA(inst, g_dir, MAX_PATH);
