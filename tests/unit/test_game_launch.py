@@ -1,7 +1,11 @@
 """Launch isolates each process, resolves maps, validates first and cleans up on failure."""
 
 import tempfile
+import sys
 import unittest
+
+if sys.platform != "win32":
+    raise unittest.SkipTest("needs the Windows game launcher (kernel32/user32)")
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch

@@ -1,6 +1,7 @@
 """HookPipe line framing, timeouts and close detection over an os.pipe (no game)."""
 
 import os
+import sys
 import threading
 import time
 import unittest
@@ -64,6 +65,7 @@ class PipeTest(unittest.TestCase):
             self.pipe.readline(1)
 
 
+@unittest.skipUnless(sys.platform == "win32", "Windows named pipes")
 class OverlappedPipeTest(unittest.TestCase):
     """OverlappedPipeFile against a real named pipe served the way wc3hook.dll serves it:
     byte mode, one instance, a pending read must not block a concurrent write."""
